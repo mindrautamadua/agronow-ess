@@ -33,36 +33,48 @@ const CAROUSEL = [
   { image: "/img/gambar3.png", kind: "experience" as const },
 ];
 
+// Tiap kartu menuju bucket metode khusus sesuai judulnya (filter ?metode= di /learning).
 const SECTIONS = [
   {
     title: "Pembelajaran Formal (Formal Learning)",
     desc: "Proses belajar yang terstruktur dan terukur melalui kelas, belajar mandiri dan workshop dengan pengembangan kompetensi yang jelas. Yuk lebih produktif!",
-    items: ["/img/item1.jpg", "/img/item2.jpg", "/img/item3.jpg"],
-    href: "/learning?bucket=formal",
+    items: [
+      { src: "/img/item1.jpg", label: "Belajar di Kelas", href: "/learning?metode=mb_ict" },
+      { src: "/img/item2.jpg", label: "Belajar Mandiri", href: "/learning?metode=mb_sl" },
+      { src: "/img/item3.jpg", label: "Workshop", href: "/learning?metode=mb_w" },
+    ],
   },
   {
     title: "Pembelajaran Sosial (Social Learning)",
     desc: "Proses pembelajaran yang relevan melalui pembelajaran coaching, mentoring dan benchmarking buat kamu lebih professional. Siap naik level bareng?",
-    items: ["/img/item4.jpg", "/img/item5.jpg", "/img/item6.jpg"],
-    href: "/learning?bucket=social",
+    items: [
+      { src: "/img/item4.jpg", label: "Coaching", href: "/learning?metode=mb_c" },
+      { src: "/img/item5.jpg", label: "Mentoring", href: "/learning?metode=mb_m" },
+      { src: "/img/item6.jpg", label: "Benchmark", href: "/learning?metode=mb_b" },
+    ],
   },
   {
     title: "Belajar dari pengalaman (Experiential Learning)",
     desc: "Proses pembelajaran berbasis pengalaman nyata dan tantangan yang seru melalui action-based learning, project assignment, dan innovation box. Buat kamu jadi berpengalaman!",
-    items: ["/img/item7.jpg", "/img/item8.jpg", "/img/item9.jpg"],
-    href: "/learning?bucket=experiential",
+    items: [
+      { src: "/img/item7.jpg", label: "Action Based Learning", href: "/learning?metode=mb_lo" },
+      { src: "/img/item8.jpg", label: "Project Assignment", href: "/learning?metode=mb_pa" },
+      { src: "/img/item9.jpg", label: "Innovation Box", href: "/learning?metode=mb_ib" },
+    ],
   },
 ];
 
+// Tiap kartu menuju sub-halaman section di /insight-hub/<slug>.
 const INSIGHT = [
-  "/img/item10.jpg", "/img/item11.jpg", "/img/item12.jpg",
-  "/img/diskusi.jpg", "/img/library.jpg", "/img/article.jpg",
-  "/img/chatroom.jpg", "/img/short-movie.jpg", "/img/vlog.jpg",
-];
-
-const GAMES = [
-  "/img/games/Pacman.png", "/img/games/Candy-Crush.png", "/img/games/2048.png",
-  "/img/games/Feeding-Frenzy.png", "/img/games/tetris.png", "/img/games/Dinner-Dash.png",
+  { src: "/img/item10.jpg", label: "Webinar", href: "/insight-hub/webinar" },
+  { src: "/img/item11.jpg", label: "Direksi Menyapa", href: "/insight-hub/direksi" },
+  { src: "/img/item12.jpg", label: "Berita Terkini", href: "/insight-hub/berita" },
+  { src: "/img/diskusi.jpg", label: "Diskusi", href: "/insight-hub/diskusi" },
+  { src: "/img/library.jpg", label: "Library", href: "/insight-hub/library" },
+  { src: "/img/article.jpg", label: "Article", href: "/insight-hub/article" },
+  { src: "/img/chatroom.jpg", label: "Chatroom", href: "/insight-hub/chatroom" },
+  { src: "/img/short-movie.jpg", label: "Short Movie", href: "/insight-hub/short-movie" },
+  { src: "/img/vlog.jpg", label: "Vlog", href: "/insight-hub/vlog" },
 ];
 
 interface NavItem { label: string; active?: boolean; href: string; dropdown?: { label: string; href: string }[] }
@@ -81,7 +93,6 @@ const NAV: NavItem[] = [
     ],
   },
   { label: "Insight Hub", href: "/insight-hub" },
-  { label: "Games", href: "/games" },
   { label: "Profile", href: "/profile" },
   { label: "Bantuan", href: "/bantuan/panduan", dropdown: [{ label: "Panduan", href: "/bantuan/panduan" }, { label: "FAQ", href: "/bantuan/faq" }] },
   { label: "Logout", href: "/login" },
@@ -494,7 +505,7 @@ export default function HomePage() {
             <div className="text-[28px] font-bold sm:text-4xl">{sec.title}</div>
             <div className="mt-2 max-w-4xl text-[16px] text-white/90 sm:text-xl">{sec.desc}</div>
             <div className="mt-6 grid gap-6 sm:grid-cols-3">
-              {sec.items.map((src, i) => <ZoomImg key={i} src={src} alt={sec.title} href={sec.href} />)}
+              {sec.items.map((it, i) => <ZoomImg key={i} src={it.src} alt={it.label} href={it.href} />)}
             </div>
           </section>
         ))}
@@ -522,7 +533,7 @@ export default function HomePage() {
             Pusat informasi terintegrasi untuk memastikan Anda selalu memperoleh pembaruan terkini, mencakup webinar, pesan direksi, serta berita terbaru
           </div>
           <div className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-3">
-            {INSIGHT.map((src, i) => <ZoomImg key={i} src={src} alt="Insight Hub" href="/insight-hub" />)}
+            {INSIGHT.map((it, i) => <ZoomImg key={i} src={it.src} alt={it.label} href={it.href} />)}
           </div>
         </section>
 
@@ -543,14 +554,6 @@ export default function HomePage() {
           <div className="text-[28px] font-bold sm:text-4xl">Games (Coming Soon)</div>
           <div className="mt-2 max-w-4xl text-[16px] text-white/90 sm:text-xl">
             Game berasa belajar dengan tiap tantangannya dirancang buat bantu kamu ngerti materi sesuai tujuan belajar kamu.
-          </div>
-          <div className="mt-6 flex gap-4 overflow-x-auto pb-4">
-            {GAMES.map((src, i) => (
-              <a key={i} href="#" className="w-40 shrink-0 sm:w-48">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt="Game" className="w-full rounded-xl transition-transform hover:scale-105" />
-              </a>
-            ))}
           </div>
         </section>
       </main>

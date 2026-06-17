@@ -4,12 +4,13 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
-import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck } from "lucide-react";
+import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck, X } from "lucide-react";
 
 interface Bucket { key: string; label: string; earned: number; target: number; pct: number }
 interface LClass {
   crm_id: number; name: string; type: string | null; status: string | null;
-  bucket: string | null; jpl: number; date_start: string | null; date_end: string | null;
+  bucket: string | null; method: string | null; methodLabel: string | null;
+  jpl: number; date_start: string | null; date_end: string | null;
   verified: boolean; has_certificate: boolean;
 }
 interface Data {
@@ -23,6 +24,13 @@ const BUCKET_META: Record<string, { icon: typeof GraduationCap; short: string; a
   experiential: { icon: Briefcase, short: "Experiential", accent: "from-emerald-500 to-green-700" },
 };
 
+// Label metode belajar (kode `_learning_kategori`) — dipakai saat filter via ?metode=.
+const METHOD_LABEL: Record<string, string> = {
+  mb_ict: "Belajar di Kelas", mb_sl: "Belajar Mandiri", mb_w: "Workshop",
+  mb_c: "Coaching", mb_m: "Mentoring", mb_b: "Benchmark",
+  mb_lo: "Action Based Learning", mb_pa: "Project Assignment", mb_ib: "Innovation Box",
+};
+
 const fmtDate = (s: string | null) => {
   if (!s) return null;
   const d = new Date(s);
@@ -31,17 +39,21 @@ const fmtDate = (s: string | null) => {
 
 function LearningInner() {
   const params = useSearchParams();
-  const initial = params.get("bucket") || "all";
-  const [filter, setFilter] = useState(initial);
+  // Filter bisa berupa bucket (formal/social/experiential) atau kode metode (mb_*) lewat ?metode=.
+  const paramFilter = (p: URLSearchParams) => p.get("metode") || p.get("bucket") || "all";
+  const [filter, setFilter] = useState(() => paramFilter(params));
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState(false);
 
-  useEffect(() => { setFilter(params.get("bucket") || "all"); }, [params]);
+  useEffect(() => { setFilter(paramFilter(params)); }, [params]);
   useEffect(() => {
     fetch("/api/learning").then((r) => r.json()).then((d) => { d.summary ? setData(d) : setErr(true); }).catch(() => setErr(true));
   }, []);
 
-  const classes = (data?.classes ?? []).filter((c) => filter === "all" || c.bucket === filter);
+  const activeMethod = METHOD_LABEL[filter] ? filter : null;
+  const classes = (data?.classes ?? []).filter(
+    (c) => filter === "all" || c.bucket === filter || c.method === filter,
+  );
 
   const TABS = [
     { key: "all", label: "Semua" },
@@ -124,6 +136,14 @@ function LearningInner() {
                   {t.label}
                 </button>
               ))}
+              {activeMethod && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-4 py-2 text-[13px] font-medium text-white">
+                  {METHOD_LABEL[activeMethod]}
+                  <button onClick={() => setFilter("all")} aria-label="Hapus filter metode" className="-mr-1 rounded-full p-0.5 hover:bg-white/20">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              )}
             </div>
 
             {/* Daftar kelas */}
@@ -138,7 +158,7 @@ function LearningInner() {
                     <div className="min-w-0 flex-1">
                       <p className="text-[15px] font-semibold leading-snug">{c.name}</p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-white/55">
-                        <span>{meta?.short ?? "Lainnya"}</span>
+                        <span>{c.methodLabel ?? meta?.short ?? "Lainnya"}</span>
                         <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {c.jpl} JPL</span>
                         {fmtDate(c.date_start) && <span>{fmtDate(c.date_start)}{fmtDate(c.date_end) ? ` – ${fmtDate(c.date_end)}` : ""}</span>}
                       </div>

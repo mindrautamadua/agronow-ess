@@ -43,6 +43,8 @@ export interface LearningClass {
   status: string | null;
   bucket: BucketKey | null;
   kategori: string | null;
+  method: string | null;
+  methodLabel: string | null;
   jpl: number;
   date_start: string | null;
   date_end: string | null;
@@ -135,13 +137,15 @@ export async function getMemberClasses(memberId: number): Promise<LearningClass[
   const rows = await query<{
     crm_id: number; cr_id: number; cr_name: string; cr_type: string | null; cr_status: string | null;
     cr_date_start: string | null; cr_date_end: string | null; cr_has_certificate: number | null;
-    is_verified: string | null; has_cert: boolean; kategori: string | null; jpl: number | null;
+    is_verified: string | null; has_cert: boolean; kategori: string | null;
+    metode_kode: string | null; metode_nama: string | null; jpl: number | null;
   }>(
     `SELECT m.crm_id, c.cr_id, c.cr_name, c.cr_type, c.cr_status,
             c.cr_date_start, c.cr_date_end, c.cr_has_certificate,
             m.is_verified,
             (m.berkas_sertifikat IS NOT NULL AND m.berkas_sertifikat <> '') AS has_cert,
-            lk.kategori, c.jpl_learning_kategori1 AS jpl
+            lk.kategori, lk.kode AS metode_kode, lk.nama AS metode_nama,
+            c.jpl_learning_kategori1 AS jpl
        FROM _classroom_member m
        JOIN _classroom c ON c.cr_id = m.cr_id
        LEFT JOIN _learning_kategori lk ON lk.id = c.id_learning_kategori1
@@ -158,6 +162,8 @@ export async function getMemberClasses(memberId: number): Promise<LearningClass[
     status: r.cr_status,
     bucket: r.kategori ? KATEGORI_TO_BUCKET[r.kategori] ?? null : null,
     kategori: r.kategori,
+    method: r.metode_kode,
+    methodLabel: r.metode_nama ? clean(r.metode_nama) : null,
     jpl: Number(r.jpl ?? 0),
     date_start: r.cr_date_start,
     date_end: r.cr_date_end,

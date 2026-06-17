@@ -21,7 +21,6 @@ const NAV: NavItem[] = [
     ],
   },
   { label: "Insight Hub", href: "/insight-hub" },
-  { label: "Games", href: "/games" },
   { label: "Profile", href: "/profile" },
   { label: "Bantuan", href: "/bantuan/panduan", dropdown: [{ label: "Panduan", href: "/bantuan/panduan" }, { label: "FAQ", href: "/bantuan/faq" }] },
   { label: "Logout", href: "/login" },

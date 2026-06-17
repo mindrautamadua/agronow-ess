@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Bell, Menu, ChevronDown, ExternalLink, GraduationCap, Users, Briefcase,
-  Wallet, FileText, ArrowUpRight, Trophy,
+  Wallet, FileText, ArrowUpRight, Trophy, Flame, ArrowRight, Sparkles,
 } from "lucide-react";
 
 // ── Tipe data dari /api/me ──
@@ -71,10 +71,13 @@ const NAV: NavItem[] = [
   {
     label: "Progres Pembelajaran", href: "/learning",
     dropdown: [
+      { label: "AI Coach", href: "/coach" },
       { label: "Aktivitas Pembelajaran", href: "/learning" },
       { label: "Pembelajaran Formal", href: "/learning?bucket=formal" },
       { label: "Pembelajaran Sosial", href: "/learning?bucket=social" },
       { label: "Belajar Dari Pengalaman", href: "/learning?bucket=experiential" },
+      { label: "Belajar Harian", href: "/harian" },
+      { label: "Peta Kompetensi", href: "/kompetensi" },
     ],
   },
   { label: "Insight Hub", href: "/insight-hub" },
@@ -89,6 +92,45 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2)
 
 function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-md bg-white/10 ${className}`} />;
+}
+
+// CTA Belajar Harian — baca streak dari perangkat (sinkron dgn halaman /harian).
+function DailyCTA() {
+  const [streak, setStreak] = useState<{ current: number; lastDate: string } | null>(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("ess_microlearning_streak_v1");
+      if (raw) { const s = JSON.parse(raw); setStreak({ current: s.current ?? 0, lastDate: s.lastDate ?? "" }); }
+      else setStreak({ current: 0, lastDate: "" });
+    } catch { setStreak({ current: 0, lastDate: "" }); }
+  }, []);
+
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  const doneToday = streak?.lastDate === today;
+  const n = streak?.current ?? 0;
+
+  return (
+    <a href="/harian" className="group relative mt-12 block overflow-hidden rounded-[24px] border border-amber-400/20 bg-gradient-to-r from-[#241803]/70 to-[#0c1c0e]/55 p-6 shadow-[0_24px_70px_-28px_rgba(0,0,0,0.9)] backdrop-blur-2xl">
+      <div aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-44 w-44 rounded-full blur-3xl" style={{ background: "radial-gradient(circle, rgba(251,146,60,0.18), transparent 65%)" }} />
+      <div className="relative z-10 flex items-center gap-4">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/10 backdrop-blur">
+          <Flame className={`h-8 w-8 ${n > 0 ? "text-amber-400" : "text-white/40"}`} fill={n > 0 ? "rgba(251,146,60,0.25)" : "none"} strokeWidth={1.5} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xl font-bold sm:text-2xl">Belajar Harian</h3>
+            {n > 0 && <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[12px] font-bold text-amber-200 tabular-nums">🔥 {n} hari</span>}
+          </div>
+          <p className="mt-0.5 text-[13.5px] text-emerald-50/70">
+            {doneToday ? "Misi hari ini selesai 🎉 Sampai jumpa besok!" : "Kuis istilah 1 menit — jaga streak-mu tetap menyala."}
+          </p>
+        </div>
+        <span className="flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-4 py-2 text-[13px] font-semibold transition-all group-hover:bg-white/15">
+          {doneToday ? "Lihat" : "Mulai"} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+        </span>
+      </div>
+    </a>
+  );
 }
 
 function ZoomImg({ src, alt, href }: { src: string; alt: string; href?: string }) {
@@ -141,7 +183,7 @@ export default function HomePage() {
               <div key={n.label} className="group relative">
                 <button
                   onClick={() => go(n.href)}
-                  className={`flex items-center gap-1 rounded px-2 py-1.5 text-[14px] transition-colors hover:text-emerald-300 ${n.active ? "font-semibold" : "text-white/90"}`}
+                  className={`flex items-center gap-1 whitespace-nowrap rounded px-2 py-1.5 text-[14px] transition-colors hover:text-emerald-300 ${n.active ? "font-semibold" : "text-white/90"}`}
                 >
                   {n.label}
                   {n.dropdown && <ChevronDown className="h-3.5 w-3.5" />}
@@ -421,6 +463,30 @@ export default function HomePage() {
             </a>
           </div>
         </section>
+
+        {/* ───── AI Coach ───── */}
+        <a href="/coach" className="group relative mt-12 block overflow-hidden rounded-[24px] border border-emerald-400/20 bg-gradient-to-r from-[#0c2a14]/70 to-[#0c1c0e]/55 p-6 shadow-[0_24px_70px_-28px_rgba(0,0,0,0.9)] backdrop-blur-2xl">
+          <div aria-hidden className="pointer-events-none absolute -right-10 -top-12 h-44 w-44 rounded-full blur-3xl" style={{ background: "radial-gradient(circle, rgba(74,222,128,0.2), transparent 65%)" }} />
+          <span aria-hidden className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
+          <div className="relative z-10 flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-green-600 text-[#06210a]">
+              <Sparkles className="h-7 w-7" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xl font-bold sm:text-2xl">Coach Agro</h3>
+                <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-200">AI</span>
+              </div>
+              <p className="mt-0.5 text-[13.5px] text-emerald-50/70">Tanya apa saja soal progres, gap kompetensi & rekomendasi pelatihanmu.</p>
+            </div>
+            <span className="flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-4 py-2 text-[13px] font-semibold transition-all group-hover:bg-white/15">
+              Tanya <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </div>
+        </a>
+
+        {/* ───── Belajar Harian (microlearning + streak) ───── */}
+        <DailyCTA />
 
         {/* Section pembelajaran */}
         {SECTIONS.map((sec) => (

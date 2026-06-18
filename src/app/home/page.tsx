@@ -106,7 +106,6 @@ const ANPER_LOGOS = [
   "sgn.png",
   "Sri pamela.png",
   "Industri Karet Nusantara.webp",
-  "INL.png",
   "RPN.png",
   "LPP.png",
   "kpbn.png",

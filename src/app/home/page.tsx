@@ -98,6 +98,7 @@ const INSIGHT = [
   { src: "/img/chatroom.jpg", label: "Chatroom", href: "/insight-hub/chatroom" },
   { src: "/img/short-movie.jpg", label: "Short Movie", href: "/insight-hub/short-movie" },
   { src: "/img/vlog.jpg", label: "Vlog", href: "/insight-hub/vlog" },
+  { src: "/img/SOP_banner_no_ornament.png", label: "SOP", href: "https://onehub.ptpn.id" },
 ];
 
 // Logo anak perusahaan (file di public/img/logo-anper/) — ditampilkan di footer.
@@ -189,7 +190,11 @@ function ZoomImg({ src, alt, href }: { src: string; alt: string; href?: string }
       <img src={src} alt={alt} className="h-full w-full object-cover transition-transform duration-500 hover:scale-110" />
     </div>
   );
-  return href ? <a href={href}>{inner}</a> : inner;
+  if (!href) return inner;
+  const external = /^https?:\/\//.test(href);
+  return external
+    ? <a href={href} target="_blank" rel="noopener noreferrer">{inner}</a>
+    : <a href={href}>{inner}</a>;
 }
 
 // Baris swipe horizontal ala Netflix: scroll-snap + swipe natif (mobile),

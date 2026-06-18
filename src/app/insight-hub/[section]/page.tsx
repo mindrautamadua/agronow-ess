@@ -49,6 +49,11 @@ export default function InsightSectionPage() {
   const isLibrary = meta?.kind === "library";
   const isSoon = !meta || meta.kind === "soon";
 
+  // Section eksternal (mis. SOP → OneHub): alihkan langsung ke URL tujuan.
+  useEffect(() => {
+    if (meta?.kind === "external" && meta.href) window.location.replace(meta.href);
+  }, [meta]);
+
   // Debounce input pencarian → q (memicu refetch lewat dependensi load).
   useEffect(() => {
     const t = setTimeout(() => setQ(qInput.trim()), 350);

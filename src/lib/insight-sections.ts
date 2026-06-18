@@ -2,9 +2,9 @@
  * Registry section Insight Hub — dipakai landing (/insight-hub), sub-halaman
  * (/insight-hub/[section]), dan kartu di /home. Sumber tunggal slug → metadata.
  */
-import { Video, MessageSquareQuote, Newspaper, MessagesSquare, Library, FileText, MessageCircle, Play, Clapperboard, Quote } from "lucide-react";
+import { Video, MessageSquareQuote, Newspaper, MessagesSquare, Library, FileText, MessageCircle, Play, Clapperboard, Quote, FileCheck } from "lucide-react";
 
-export type SectionKind = "video" | "direksi" | "berita" | "article" | "library" | "quotes" | "discussion" | "chatroom" | "soon";
+export type SectionKind = "video" | "direksi" | "berita" | "article" | "library" | "quotes" | "discussion" | "chatroom" | "soon" | "external";
 
 export interface SectionMeta {
   slug: string;
@@ -13,6 +13,7 @@ export interface SectionMeta {
   image: string | null; // foto kartu; null → tile gradien
   icon: typeof Video;
   kind: SectionKind;
+  href?: string; // bila ada, kartu menautkan ke URL ini (eksternal, tab baru) alih-alih sub-halaman
 }
 
 export const INSIGHT_SECTIONS: SectionMeta[] = [
@@ -34,6 +35,9 @@ export const INSIGHT_SECTIONS: SectionMeta[] = [
     desc: "Film pendek inspiratif pilihan." },
   { slug: "vlog", title: "Vlog", image: "/img/vlog.jpg", icon: Play, kind: "video",
     desc: "Vlog dan cerita seru dari lapangan." },
+  { slug: "sop", title: "SOP", image: "/img/SOP_banner_no_ornament.png", icon: FileCheck, kind: "external",
+    href: "https://onehub.ptpn.id",
+    desc: "Standard Operating Procedure — akses panduan resmi di OneHub PTPN." },
   { slug: "inspirasi", title: "Inspirasi", image: null, icon: Quote, kind: "quotes",
     desc: "Kutipan inspiratif untuk menyemangati harimu." },
 ];

@@ -6,8 +6,13 @@ import { INSIGHT_SECTIONS, type SectionMeta } from "@/lib/insight-sections";
 /** Kartu section → sub-halaman. Foto bila ada, selain itu tile gradien. */
 function SectionCard({ s }: { s: SectionMeta }) {
   const Icon = s.icon;
+  const external = !!s.href;
   return (
-    <a href={`/insight-hub/${s.slug}`} className="group block overflow-hidden rounded-[15px] bg-black shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+    <a
+      href={external ? s.href : `/insight-hub/${s.slug}`}
+      {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      className="group block overflow-hidden rounded-[15px] bg-black shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
+    >
       {s.image ? (
         <div className="relative aspect-[3/4]">
           {/* eslint-disable-next-line @next/next/no-img-element */}

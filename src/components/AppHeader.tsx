@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Menu, ChevronDown } from "lucide-react";
+import { Menu, ChevronDown } from "lucide-react";
+import NotificationBell from "./NotificationBell";
 
 interface NavItem { label: string; href: string; dropdown?: { label: string; href: string }[] }
 
@@ -20,6 +21,7 @@ const NAV: NavItem[] = [
     ],
   },
   { label: "Insight Hub", href: "/insight-hub" },
+  { label: "Chat", href: "/chat" },
   { label: "Profile", href: "/profile" },
   { label: "Bantuan", href: "/bantuan/panduan", dropdown: [{ label: "Panduan", href: "/bantuan/panduan" }, { label: "FAQ", href: "/bantuan/faq" }] },
   { label: "Logout", href: "/login" },
@@ -69,7 +71,7 @@ export default function AppHeader({ active }: { active?: string }) {
         </nav>
 
         <div className="flex items-center gap-3">
-          <button className="relative" title="Notifikasi"><Bell className="h-6 w-6" /></button>
+          <NotificationBell />
           <button className="lg:hidden" onClick={() => setMenuOpen((v) => !v)} aria-label="Menu"><Menu className="h-7 w-7" /></button>
         </div>
       </div>

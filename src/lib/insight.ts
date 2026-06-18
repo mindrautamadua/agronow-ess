@@ -74,10 +74,13 @@ export interface DiskusiItem {
   body: string | null;   // HTML kaya forum_desc
   penulis: string; penulisImg: string | null;
   tgl: string | null; balasan: number;
+  likes: number; likedByMe: boolean;
 }
 export interface DiskusiReply {
-  id: number; penulis: string; penulisImg: string | null;
+  id: number; memberId: number;
+  penulis: string; penulisImg: string | null;
   tgl: string | null; body: string | null; // HTML kaya fc_desc
+  likes: number; likedByMe: boolean;
 }
 
 export interface Paged<T> { items: T[]; total: number }
@@ -105,18 +108,23 @@ function search(q: string | undefined, ...cols: string[]): { sql: string; params
   return { sql: ` AND (${cols.map((c) => `${c} ILIKE ?`).join(" OR ")})`, params: cols.map(() => like) };
 }
 
-/** Daftar thread diskusi (`_forum`, status open) + jumlah balasan & penulis. */
-export async function getDiskusi(limit = 12, offset = 0, q?: string): Promise<Paged<DiskusiItem>> {
+/**
+ * Daftar thread diskusi (`_forum`, status open) + jumlah balasan, penulis, & like.
+ * `viewerId` (member yang login) dipakai menghitung `likedByMe`; 0 bila tamu.
+ */
+export async function getDiskusi(limit = 12, offset = 0, q?: string, viewerId = 0): Promise<Paged<DiskusiItem>> {
   const s = search(q, "f.forum_name", "f.forum_desc");
   const [rows, count] = await Promise.all([
-    query<{ id: number; judul: string; body: string | null; tgl: string | null; penulis: string | null; img: string | null; balasan: number }>(
+    query<{ id: number; judul: string; body: string | null; tgl: string | null; penulis: string | null; img: string | null; balasan: number; likes: number; liked: boolean }>(
       `SELECT f.forum_id AS id, f.forum_name AS judul, f.forum_desc AS body,
               f.forum_create_date AS tgl, m.member_name AS penulis, m.member_image AS img,
-              (SELECT COUNT(*) FROM _forum_chat c WHERE c.forum_id = f.forum_id AND c.fc_status = 'active') AS balasan
+              (SELECT COUNT(*) FROM _forum_chat c WHERE c.forum_id = f.forum_id AND c.fc_status = 'active') AS balasan,
+              (SELECT COUNT(*) FROM _forum_like l WHERE l.forum_id = f.forum_id) AS likes,
+              EXISTS (SELECT 1 FROM _forum_like l WHERE l.forum_id = f.forum_id AND l.member_id = ?) AS liked
          FROM _forum f LEFT JOIN _member m ON m.member_id = f.member_id
         WHERE f.forum_status = 'open'${s.sql}
         ORDER BY f.forum_create_date DESC NULLS LAST, f.forum_id DESC LIMIT ? OFFSET ?`,
-      [...s.params, limit, offset],
+      [viewerId, ...s.params, limit, offset],
     ),
     query<{ n: number }>(`SELECT COUNT(*) AS n FROM _forum f WHERE f.forum_status = 'open'${s.sql}`, s.params),
   ]);
@@ -126,24 +134,49 @@ export async function getDiskusi(limit = 12, offset = 0, q?: string): Promise<Pa
       preview: excerpt(r.body), body: richHtml(r.body) || null,
       penulis: clean(r.penulis) || "Anonim", penulisImg: avatarUrl(r.img),
       tgl: r.tgl, balasan: Number(r.balasan) || 0,
+      likes: Number(r.likes) || 0, likedByMe: !!r.liked,
     })),
     total: count[0]?.n ?? 0,
   };
 }
 
-/** Balasan satu thread diskusi (`_forum_chat`, status active), urut terlama→terbaru. */
-export async function getDiskusiReplies(forumId: number): Promise<DiskusiReply[]> {
-  const rows = await query<{ id: number; body: string | null; tgl: string | null; penulis: string | null; img: string | null }>(
-    `SELECT c.fc_id AS id, c.fc_desc AS body, c.fc_create_date AS tgl,
-            m.member_name AS penulis, m.member_image AS img
+/**
+ * Toggle like pada thread diskusi untuk satu member (`_forum_like`).
+ * Mengembalikan status like terbaru + total like, atau null bila thread tak ada.
+ */
+export async function toggleThreadLike(forumId: number, memberId: number): Promise<{ liked: boolean; likes: number } | null> {
+  const exists = await queryOne<{ forum_id: number }>(`SELECT forum_id FROM _forum WHERE forum_id = ? AND forum_status = 'open'`, [forumId]);
+  if (!exists) return null;
+
+  const del = await query<{ forum_id: number }>(`DELETE FROM _forum_like WHERE forum_id = ? AND member_id = ? RETURNING forum_id`, [forumId, memberId]);
+  const liked = del.length === 0;
+  if (liked) {
+    await query(`INSERT INTO _forum_like (forum_id, member_id) VALUES (?, ?) ON CONFLICT (forum_id, member_id) DO NOTHING`, [forumId, memberId]);
+  }
+  const c = await queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM _forum_like WHERE forum_id = ?`, [forumId]);
+  return { liked, likes: Number(c?.n) || 0 };
+}
+
+/**
+ * Balasan satu thread diskusi (`_forum_chat`, status active), urut terlama→terbaru.
+ * `viewerId` (member yang sedang login) dipakai menghitung `likedByMe`; 0 bila tamu.
+ */
+export async function getDiskusiReplies(forumId: number, viewerId = 0): Promise<DiskusiReply[]> {
+  const rows = await query<{ id: number; member_id: number; body: string | null; tgl: string | null; penulis: string | null; img: string | null; likes: number; liked: boolean }>(
+    `SELECT c.fc_id AS id, c.member_id, c.fc_desc AS body, c.fc_create_date AS tgl,
+            m.member_name AS penulis, m.member_image AS img,
+            (SELECT COUNT(*) FROM _forum_chat_like l WHERE l.fc_id = c.fc_id) AS likes,
+            EXISTS (SELECT 1 FROM _forum_chat_like l WHERE l.fc_id = c.fc_id AND l.member_id = ?) AS liked
        FROM _forum_chat c LEFT JOIN _member m ON m.member_id = c.member_id
       WHERE c.forum_id = ? AND c.fc_status = 'active'
       ORDER BY c.fc_create_date ASC, c.fc_id ASC`,
-    [forumId],
+    [viewerId, forumId],
   );
   return rows.map((r) => ({
-    id: r.id, penulis: clean(r.penulis) || "Anonim", penulisImg: avatarUrl(r.img),
+    id: r.id, memberId: r.member_id,
+    penulis: clean(r.penulis) || "Anonim", penulisImg: avatarUrl(r.img),
     tgl: r.tgl, body: richHtml(r.body) || null,
+    likes: Number(r.likes) || 0, likedByMe: !!r.liked,
   }));
 }
 
@@ -169,12 +202,47 @@ export async function addDiskusiReply(forumId: number, memberId: number, text: s
   );
   const m = await queryOne<{ nama: string | null; img: string | null }>(`SELECT member_name AS nama, member_image AS img FROM _member WHERE member_id = ?`, [memberId]);
   return {
-    id: ins[0].fc_id,
+    id: ins[0].fc_id, memberId,
     penulis: clean(m?.nama ?? null) || "Anonim",
     penulisImg: avatarUrl(m?.img ?? null),
     tgl: ins[0].tgl,
     body: richHtml(stored) || null,
+    likes: 0, likedByMe: false,
   };
+}
+
+/**
+ * Ubah isi balasan diskusi. Hanya pemilik (`member_id` cocok) & komentar aktif
+ * yang boleh disunting. Input disanitasi sama seperti `addDiskusiReply`.
+ * Mengembalikan body HTML baru, atau null bila bukan pemilik / tak ada / kosong.
+ */
+export async function editDiskusiReply(fcId: number, memberId: number, text: string): Promise<{ body: string | null } | null> {
+  const stored = text.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").trim().slice(0, 4000).replace(/\r\n|\r|\n/g, "<br>");
+  if (!stored) return null;
+
+  const upd = await query<{ fc_id: number }>(
+    `UPDATE _forum_chat SET fc_desc = ? WHERE fc_id = ? AND member_id = ? AND fc_status = 'active' RETURNING fc_id`,
+    [stored, fcId, memberId],
+  );
+  if (!upd.length) return null;
+  return { body: richHtml(stored) || null };
+}
+
+/**
+ * Toggle like pada balasan diskusi untuk satu member (`_forum_chat_like`).
+ * Mengembalikan status like terbaru + total like, atau null bila komentar tak ada.
+ */
+export async function toggleDiskusiLike(fcId: number, memberId: number): Promise<{ liked: boolean; likes: number } | null> {
+  const exists = await queryOne<{ fc_id: number }>(`SELECT fc_id FROM _forum_chat WHERE fc_id = ? AND fc_status = 'active'`, [fcId]);
+  if (!exists) return null;
+
+  const del = await query<{ fc_id: number }>(`DELETE FROM _forum_chat_like WHERE fc_id = ? AND member_id = ? RETURNING fc_id`, [fcId, memberId]);
+  const liked = del.length === 0;
+  if (liked) {
+    await query(`INSERT INTO _forum_chat_like (fc_id, member_id) VALUES (?, ?) ON CONFLICT (fc_id, member_id) DO NOTHING`, [fcId, memberId]);
+  }
+  const c = await queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM _forum_chat_like WHERE fc_id = ?`, [fcId]);
+  return { liked, likes: Number(c?.n) || 0 };
 }
 
 /* ── Chatroom (`_forum_group` = room, `_forum_group_chat` = pesan) ────────── */

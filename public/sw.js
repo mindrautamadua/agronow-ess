@@ -6,7 +6,7 @@
  *  - Aset statis hashed (_next/static, ikon, gambar): cache-first (immutable).
  *  - Lainnya: lewat ke jaringan apa adanya.
  */
-const VERSION = "agronow-ess-v2";
+const VERSION = "agronow-ess-v3";
 const STATIC_CACHE = `${VERSION}-static`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -32,6 +32,36 @@ self.addEventListener("activate", (event) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
+  );
+});
+
+// ── Web Push: tampilkan notifikasi OS (termasuk saat PWA tertutup) ──
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data && event.data.text() }; }
+  const title = data.title || "Agronow";
+  const options = {
+    body: data.body || "",
+    icon: "/icon-192x192.png",
+    badge: "/icon-192x192.png",
+    tag: data.tag || undefined,
+    data: { url: data.url || "/home" },
+    vibrate: [80, 40, 80],
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Klik notifikasi → fokuskan tab yang ada atau buka URL tujuan.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/home";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if ("focus" in c) { c.focus(); if ("navigate" in c) c.navigate(url); return; }
+      }
+      return self.clients.openWindow(url);
+    }),
   );
 });
 

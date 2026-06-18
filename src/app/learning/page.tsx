@@ -4,7 +4,16 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
-import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck, X } from "lucide-react";
+import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck, X, ExternalLink, ArrowUpRight } from "lucide-react";
+
+/** Logo LinkedIn (lucide tidak menyediakan ikon brand ini). */
+function LinkedinMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.34V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.07 2.07 0 1 1 0-4.14 2.07 2.07 0 0 1 0 4.14ZM7.12 20.45H3.56V9h3.56v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0Z" />
+    </svg>
+  );
+}
 
 interface Bucket { key: string; label: string; earned: number; target: number; pct: number }
 interface LClass {
@@ -16,7 +25,24 @@ interface LClass {
 interface Data {
   summary: { total: { earned: number; target: number; pct: number }; buckets: Bucket[]; totalClasses: number; certificates: number };
   classes: LClass[];
+  member?: { name: string | null; email: string | null };
 }
+
+// Belajar Mandiri terhubung ke LinkedIn Learning. Katalog ditautkan langsung
+// ke LinkedIn Learning (hyperlink) — tiap kartu membuka pencarian topik terkait.
+const LINKEDIN_LEARNING_URL = "https://www.linkedin.com/learning/";
+const LINKEDIN_CATALOG: { title: string; topic: string; keyword: string }[] = [
+  { title: "Leadership Foundations", topic: "Kepemimpinan", keyword: "leadership foundations" },
+  { title: "Project Management Foundations", topic: "Manajemen Proyek", keyword: "project management foundations" },
+  { title: "Data Analysis with Excel", topic: "Analisis Data", keyword: "excel data analysis" },
+  { title: "Effective Communication", topic: "Komunikasi", keyword: "communication skills" },
+  { title: "Agile Project Management", topic: "Agile", keyword: "agile project management" },
+  { title: "Financial Literacy", topic: "Keuangan", keyword: "finance for non financial managers" },
+  { title: "Digital Transformation", topic: "Transformasi Digital", keyword: "digital transformation" },
+  { title: "Time Management", topic: "Produktivitas", keyword: "time management" },
+];
+const linkedinSearchUrl = (keyword: string) =>
+  `https://www.linkedin.com/learning/search?keywords=${encodeURIComponent(keyword)}`;
 
 const BUCKET_META: Record<string, { icon: typeof GraduationCap; short: string; accent: string }> = {
   formal: { icon: GraduationCap, short: "Formal", accent: "from-lime-500 to-green-600" },
@@ -146,9 +172,65 @@ function LearningInner() {
               )}
             </div>
 
+            {/* Belajar Mandiri → LinkedIn Learning */}
+            {filter === "mb_sl" && (
+              <section className="mt-5 space-y-4">
+                {/* Kartu koneksi LinkedIn Learning */}
+                <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-gradient-to-br from-[#0a66c2]/20 to-white/[0.02] p-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0a66c2]"><LinkedinMark className="h-5 w-5" /></div>
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-semibold">LinkedIn Learning</p>
+                      <p className="mt-0.5 text-[13px] text-white/60">
+                        Belajar mandiri lewat ribuan kursus LinkedIn Learning.
+                        {data.member?.email && <> Masuk dengan email kerja: <span className="font-medium text-white/80">{data.member.email}</span></>}
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    href={LINKEDIN_LEARNING_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#0a66c2] px-5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#0958a8]"
+                  >
+                    Buka LinkedIn Learning <ExternalLink className="h-4 w-4" />
+                  </a>
+                </div>
+
+                {/* Katalog pelatihan */}
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[15px] font-semibold">Katalog Pelatihan</p>
+                    <a href={LINKEDIN_LEARNING_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[13px] font-medium text-[#4a9eff] hover:underline">
+                      Lihat semua <ArrowUpRight className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {LINKEDIN_CATALOG.map((c) => (
+                      <a
+                        key={c.title}
+                        href={linkedinSearchUrl(c.keyword)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex flex-col rounded-xl border border-white/10 bg-white/[0.02] p-4 transition-colors hover:border-[#0a66c2]/50 hover:bg-white/[0.05]"
+                      >
+                        <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#0a66c2]/15 px-2.5 py-0.5 text-[11px] font-medium text-[#4a9eff]">
+                          <LinkedinMark className="h-3 w-3" /> {c.topic}
+                        </span>
+                        <span className="mt-3 text-[14px] font-semibold leading-snug">{c.title}</span>
+                        <span className="mt-auto pt-3 inline-flex items-center gap-1 text-[12px] text-white/50 group-hover:text-white/70">
+                          Mulai belajar <ArrowUpRight className="h-3.5 w-3.5" />
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            )}
+
             {/* Daftar kelas */}
             <section className="mt-5 space-y-3">
-              {classes.length === 0 && <p className="rounded-xl border border-white/10 bg-white/[0.03] p-6 text-center text-white/50">Belum ada aktivitas pada kategori ini.</p>}
+              {classes.length === 0 && <p className="rounded-xl border border-white/10 bg-white/[0.03] p-6 text-center text-white/50">{filter === "mb_sl" ? "Belum ada aktivitas belajar mandiri tercatat. Mulai dari katalog di atas." : "Belum ada aktivitas pada kategori ini."}</p>}
               {classes.map((c) => {
                 const meta = c.bucket ? BUCKET_META[c.bucket] : null;
                 const Icon = meta?.icon ?? GraduationCap;

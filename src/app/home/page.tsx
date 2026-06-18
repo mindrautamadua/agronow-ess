@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import NotificationBell from "@/components/NotificationBell";
 import {
-  Bell, Menu, ChevronDown, ChevronLeft, ChevronRight, ExternalLink,
+  Menu, ChevronDown, ChevronLeft, ChevronRight, ExternalLink,
   Wallet, FileText, ArrowUpRight, Flame, ArrowRight, Sparkles,
 } from "lucide-react";
 
@@ -104,13 +105,13 @@ const ANPER_LOGOS = [
   "ptpn 1.png",
   "logo ptpn 4.png",
   "sgn.png",
-  "Sri pamela.png",
+  "sripamela_logo_transparent.png",
   "Industri Karet Nusantara.webp",
   "RPN.png",
   "LPP.png",
   "kpbn.png",
   "bionusa.png",
-  "kinra.jpg",
+  "kinra_logo_transparent.png",
 ];
 
 interface NavItem { label: string; active?: boolean; href: string; dropdown?: { label: string; href: string }[] }
@@ -129,6 +130,7 @@ const NAV: NavItem[] = [
     ],
   },
   { label: "Insight Hub", href: "/insight-hub" },
+  { label: "Chat", href: "/chat" },
   { label: "Profile", href: "/profile" },
   { label: "Bantuan", href: "/bantuan/panduan", dropdown: [{ label: "Panduan", href: "/bantuan/panduan" }, { label: "FAQ", href: "/bantuan/faq" }] },
   { label: "Logout", href: "/login" },
@@ -301,7 +303,7 @@ export default function HomePage() {
           </nav>
 
           <div className="flex items-center gap-3">
-            <button className="relative" title="Notifikasi"><Bell className="h-6 w-6" /></button>
+            <NotificationBell />
             <button className="lg:hidden" onClick={() => setMenuOpen((v) => !v)} aria-label="Menu"><Menu className="h-7 w-7" /></button>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { getWebinars, getMovies, getDireksi, getQuotes, getBerita, getArticle, getLibrary, getLibraryCategories, getDiskusi, getDiskusiReplies, getChatrooms, getChatMessages } from "@/lib/insight";
+import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,8 +36,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ section:
         return Response.json({ kind: "quotes", ...(await getQuotes(PAGE_SIZE, offset, q)) });
       case "diskusi": {
         const thread = sp.get("thread");
-        if (thread) return Response.json({ kind: "diskusi-replies", items: await getDiskusiReplies(Number(thread)) });
-        return Response.json({ kind: "discussion", ...(await getDiskusi(PAGE_SIZE, offset, q)) });
+        if (thread) {
+          const viewer = await getSession().then((s) => s?.memberId ?? 0);
+          return Response.json({ kind: "diskusi-replies", items: await getDiskusiReplies(Number(thread), viewer) });
+        }
+        const viewerList = await getSession().then((s) => s?.memberId ?? 0);
+        return Response.json({ kind: "discussion", ...(await getDiskusi(PAGE_SIZE, offset, q, viewerList)) });
       }
       case "chatroom": {
         const room = sp.get("room");

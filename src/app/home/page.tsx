@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  Bell, Menu, ChevronDown, ExternalLink,
+  Bell, Menu, ChevronDown, ChevronLeft, ChevronRight, ExternalLink,
   Wallet, FileText, ArrowUpRight, Flame, ArrowRight, Sparkles,
 } from "lucide-react";
 
@@ -174,6 +174,42 @@ function ZoomImg({ src, alt, href }: { src: string; alt: string; href?: string }
     </div>
   );
   return href ? <a href={href}>{inner}</a> : inner;
+}
+
+// Baris swipe horizontal ala Netflix: scroll-snap + swipe natif (mobile),
+// tombol panah muncul saat hover (desktop), scrollbar disembunyikan.
+// `itemClass` mengatur lebar tiap kartu (mis. 3 atau 6 kartu per layar).
+function SwipeRow({ children, itemClass }: { children: React.ReactNode[]; itemClass: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const scroll = (dir: 1 | -1) => {
+    const el = ref.current;
+    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: "smooth" });
+  };
+  return (
+    <div className="group/row relative">
+      <div
+        ref={ref}
+        className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {children.map((child, i) => (
+          <div key={i} className={`shrink-0 snap-start ${itemClass}`}>{child}</div>
+        ))}
+      </div>
+      {/* Panah navigasi — hanya desktop, muncul saat hover */}
+      <button
+        type="button" aria-label="Sebelumnya" onClick={() => scroll(-1)}
+        className="absolute -left-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/70 text-white opacity-0 backdrop-blur transition hover:bg-black/90 group-hover/row:opacity-100 lg:flex"
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </button>
+      <button
+        type="button" aria-label="Berikutnya" onClick={() => scroll(1)}
+        className="absolute -right-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/70 text-white opacity-0 backdrop-blur transition hover:bg-black/90 group-hover/row:opacity-100 lg:flex"
+      >
+        <ChevronRight className="h-5 w-5" />
+      </button>
+    </div>
+  );
 }
 
 export default function HomePage() {
@@ -504,8 +540,10 @@ export default function HomePage() {
           <section key={sec.title} className="mt-12">
             <div className="text-[28px] font-bold sm:text-4xl">{sec.title}</div>
             <div className="mt-2 max-w-4xl text-[16px] text-white/90 sm:text-xl">{sec.desc}</div>
-            <div className="mt-6 grid gap-6 sm:grid-cols-3">
-              {sec.items.map((it, i) => <ZoomImg key={i} src={it.src} alt={it.label} href={it.href} />)}
+            <div className="mt-6">
+              <SwipeRow itemClass="w-[78%] sm:w-[46%] lg:w-[31.5%]">
+                {sec.items.map((it, i) => <ZoomImg key={i} src={it.src} alt={it.label} href={it.href} />)}
+              </SwipeRow>
             </div>
           </section>
         ))}
@@ -513,16 +551,22 @@ export default function HomePage() {
         {/* Tone From The Top */}
         <section className="mt-14">
           <div className="text-[28px] font-bold sm:text-4xl">Tone From The Top</div>
-          <div className="relative mt-5 flex flex-col items-center overflow-hidden rounded-[18px] bg-gradient-to-br from-[#1f3d12] to-[#0c1f08] px-6 py-10 text-center">
-            <svg width="77" height="51" viewBox="0 0 77 51" fill="none" className="mb-4">
-              <path d="M19.2181 0C13.9465 0 9.42556 1.87487 5.65534 5.62474C1.88511 9.37462 0 13.8712 0 19.1143V50.9717H32.0302V19.1143H6.40604C6.40604 15.5968 7.65722 12.5935 10.1596 10.1047C12.6619 7.61583 15.6815 6.3714 19.2181 6.3714V0ZM64.0604 0C58.7888 0 54.2679 1.87487 50.4976 5.62474C46.7274 9.37462 44.8423 13.8712 44.8423 19.1143V50.9717H76.8725V19.1143H51.2483C51.2483 15.5968 52.4995 12.5935 55.0019 10.1047C57.5042 7.61583 60.5238 6.3714 64.0604 6.3714V0ZM6.40604 25.4858H25.6242V44.6002H6.40604V25.4858ZM51.2483 25.4858H70.4665V44.6002H51.2483V25.4858Z" fill="white" fillOpacity="0.1" />
-            </svg>
-            <p className="max-w-2xl text-lg font-light italic leading-relaxed sm:text-2xl">
-              <b>Big dreams</b> define our direction, but <b>productivity</b>, cost <b>effectiveness</b>, and speed in execution define our success. This is the mindset of <b>Nusantara EntrePlanters</b>.
-            </p>
-            <div className="mt-3 text-[15px] font-light">Denaldy Mulino Mauna</div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/img/quote.png" alt="" className="mt-6 max-h-44 w-auto object-contain" />
+          <div className="relative mt-5 flex min-h-[22rem] flex-col overflow-hidden rounded-[18px] bg-gradient-to-b from-[#141414] via-[#17211a] to-[#1d3a10] sm:flex-row sm:items-stretch">
+            {/* Kiri: kutipan */}
+            <div className="relative z-10 flex flex-1 flex-col justify-center px-6 py-10 text-center sm:px-12 sm:py-14">
+              <svg width="77" height="51" viewBox="0 0 77 51" fill="none" className="mb-6">
+                <path d="M19.2181 0C13.9465 0 9.42556 1.87487 5.65534 5.62474C1.88511 9.37462 0 13.8712 0 19.1143V50.9717H32.0302V19.1143H6.40604C6.40604 15.5968 7.65722 12.5935 10.1596 10.1047C12.6619 7.61583 15.6815 6.3714 19.2181 6.3714V0ZM64.0604 0C58.7888 0 54.2679 1.87487 50.4976 5.62474C46.7274 9.37462 44.8423 13.8712 44.8423 19.1143V50.9717H76.8725V19.1143H51.2483C51.2483 15.5968 52.4995 12.5935 55.0019 10.1047C57.5042 7.61583 60.5238 6.3714 64.0604 6.3714V0ZM6.40604 25.4858H25.6242V44.6002H6.40604V25.4858ZM51.2483 25.4858H70.4665V44.6002H51.2483V25.4858Z" fill="white" fillOpacity="0.1" />
+              </svg>
+              <p className="mx-auto max-w-2xl text-lg font-light italic leading-relaxed sm:text-2xl">
+                <b>Big dreams</b> define our direction, but <b>productivity</b>, cost <b>effectiveness</b>, and speed in execution define our success. This is the mindset of <b>Nusantara EntrePlanters</b>.
+              </p>
+              <div className="mt-5 text-[15px] font-light text-white/80">Denaldy Mulino Mauna</div>
+            </div>
+            {/* Kanan: foto direksi (PNG transparan, menyatu mulus) menempel kanan-bawah */}
+            <div className="relative h-64 w-full shrink-0 self-end sm:h-auto sm:w-72 lg:w-[26rem]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/img/quote.png" alt="Denaldy Mulino Mauna" className="h-full w-full object-contain object-bottom" />
+            </div>
           </div>
         </section>
 
@@ -532,8 +576,10 @@ export default function HomePage() {
           <div className="mt-2 max-w-4xl text-[16px] text-white/90 sm:text-xl">
             Pusat informasi terintegrasi untuk memastikan Anda selalu memperoleh pembaruan terkini, mencakup webinar, pesan direksi, serta berita terbaru
           </div>
-          <div className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-3">
-            {INSIGHT.map((it, i) => <ZoomImg key={i} src={it.src} alt={it.label} href={it.href} />)}
+          <div className="mt-6">
+            <SwipeRow itemClass="w-[44%] sm:w-[30%] lg:w-[22%]">
+              {INSIGHT.map((it, i) => <ZoomImg key={i} src={it.src} alt={it.label} href={it.href} />)}
+            </SwipeRow>
           </div>
         </section>
 

@@ -112,7 +112,6 @@ const ANPER_LOGOS = [
   "kpbn.png",
   "bionusa.png",
   "kinra.jpg",
-  "agroculture_logo_hd.png",
 ];
 
 interface NavItem { label: string; active?: boolean; href: string; dropdown?: { label: string; href: string }[] }
@@ -630,12 +629,9 @@ export default function HomePage() {
           <div className="text-center text-[13px] font-semibold uppercase tracking-[0.2em] text-white/60">
             Anak Perusahaan
           </div>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4 sm:gap-6">
+          <div className="mt-8 flex flex-nowrap items-center justify-center gap-3 sm:gap-5">
             {ANPER_LOGOS.map((name) => (
-              <div
-                key={name}
-                className="flex h-20 w-32 items-center justify-center rounded-xl bg-white px-4 py-3 shadow-[0_6px_20px_rgba(0,0,0,0.25)]"
-              >
+              <div key={name} className="flex h-10 flex-1 items-center justify-center sm:h-12">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`/img/logo-anper/${encodeURIComponent(name)}`}

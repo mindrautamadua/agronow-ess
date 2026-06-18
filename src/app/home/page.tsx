@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  Bell, Menu, ChevronDown, ExternalLink, GraduationCap, Users, Briefcase,
-  Wallet, FileText, ArrowUpRight, Trophy, Flame, ArrowRight, Sparkles,
+  Bell, Menu, ChevronDown, ExternalLink,
+  Wallet, FileText, ArrowUpRight, Flame, ArrowRight, Sparkles,
 } from "lucide-react";
 
 // ── Tipe data dari /api/me ──
@@ -21,11 +21,33 @@ const SHORT_LABEL: Record<string, string> = {
   experiential: "Belajar dari Pengalaman (Experiential Learning)",
 };
 
-const BUCKET_UI: Record<string, { icon: typeof GraduationCap; from: string; to: string; tag: string }> = {
-  formal: { icon: GraduationCap, from: "#a3e635", to: "#16a34a", tag: "10%" },
-  social: { icon: Users, from: "#2dd4bf", to: "#059669", tag: "20%" },
-  experiential: { icon: Briefcase, from: "#34d399", to: "#15803d", tag: "70%" },
+// ── Status RAG (Red · Amber · Green) ──
+// Berbasis *pace*: dibandingkan target yang semestinya tercapai sampai titik tahun
+// berjalan saat ini — bukan total target tahunan — agar tidak otomatis "merah"
+// hanya karena tahun baru berjalan separuh. Ubah ambang di RAG_AMBER/RAG_GREEN.
+type Rag = "red" | "amber" | "green";
+const RAG_AMBER = 0.5; // ratio capaian/ekspektasi minimal untuk Amber
+const RAG_GREEN = 0.9; // ratio minimal untuk Green (sesuai/di atas pace)
+
+const RAG_UI: Record<Rag, { fill: string; pill: string; label: string }> = {
+  green: { fill: "from-lime-400 to-emerald-500", pill: "bg-emerald-500/25 text-emerald-50 ring-1 ring-emerald-300/40", label: "Sesuai target" },
+  amber: { fill: "from-amber-300 to-orange-400", pill: "bg-amber-500/25 text-amber-50 ring-1 ring-amber-300/40", label: "Perlu dikejar" },
+  red: { fill: "from-rose-400 to-red-500", pill: "bg-red-500/25 text-red-50 ring-1 ring-red-300/40", label: "Tertinggal" },
 };
+
+function yearElapsed(): number {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1).getTime();
+  const end = new Date(now.getFullYear() + 1, 0, 1).getTime();
+  return Math.min(Math.max((now.getTime() - start) / (end - start), 0.01), 1);
+}
+function ragOf(earned: number, target: number): Rag {
+  if (target <= 0) return "green";
+  const ratio = earned / (target * yearElapsed());
+  if (ratio >= RAG_GREEN) return "green";
+  if (ratio >= RAG_AMBER) return "amber";
+  return "red";
+}
 
 const CAROUSEL = [
   { image: "/img/gambar1.png", kind: "greeting" as const },
@@ -182,7 +204,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#19191B] text-white">
       {/* ───── Header ───── */}
-      <header className="relative z-30">
+      <header className="sticky top-0 z-30 bg-[#19191B]/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 py-5">
           <a href="/home" className="shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -308,106 +330,77 @@ export default function HomePage() {
       <main className="relative z-10 mx-auto -mt-24 max-w-[1200px] px-4 sm:-mt-32">
         <section className="grid gap-6 md:grid-cols-2">
           {/* ───── Kiri: progres pembelajaran (LIVE) ───── */}
-          <div className="relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0c1c0e]/55 p-6 shadow-[0_24px_70px_-28px_rgba(0,0,0,0.9)] backdrop-blur-2xl">
-            {/* ornamen chart asli (samar) */}
-            <div aria-hidden className="absolute inset-0 bg-cover bg-center opacity-[0.16]" style={{ backgroundImage: "url(/img/bg_chart_final.png)" }} />
-            <div aria-hidden className="absolute inset-0 bg-gradient-to-br from-emerald-900/25 via-transparent to-black/40" />
-            {/* glow dekor lembut */}
-            <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl" style={{ background: "radial-gradient(circle, rgba(74,222,128,0.12), transparent 65%)" }} />
+          <div className="relative overflow-hidden rounded-[24px] bg-gradient-to-br from-emerald-500 to-green-700 p-6 shadow-[0_24px_70px_-28px_rgba(0,0,0,0.7)] ring-1 ring-white/10 sm:p-7">
+            <div aria-hidden className="absolute inset-0 bg-cover bg-center opacity-[0.08]" style={{ backgroundImage: "url(/img/bg_chart_final.png)" }} />
+            <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-lime-300/20 blur-3xl" />
 
-            <div className="relative z-10 flex items-center justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium text-emerald-200">
-                  Progres Pembelajaran
-                </div>
-                <h3 className="mt-3 text-xl font-bold sm:text-2xl">Misi 70 · 20 · 10</h3>
+            {/* Header */}
+            <div className="relative z-10 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-2xl font-bold sm:text-[26px]">Progres pembelajaran</h3>
                 {total ? (
-                  <p className="mt-1 flex items-center gap-1.5 text-[13.5px] text-emerald-50/70">
-                    <Trophy className="h-4 w-4 text-amber-300" />
-                    {`${Math.max(total.target - total.earned, 0)} jam lagi untuk menuntaskan misi`}
-                  </p>
+                  <p className="mt-1 text-[13.5px] text-white/85">{Math.max(total.target - total.earned, 0)} jam lagi untuk menyelesaikan misi</p>
                 ) : (
-                  <Skeleton className="mt-2 h-4 w-60" />
+                  <Skeleton className="mt-2 h-4 w-56" />
                 )}
               </div>
-
-              {/* Ring progres overall */}
-              <div className="relative h-24 w-24 shrink-0 sm:h-28 sm:w-28">
-                <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
-                  <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="9" />
-                  <motion.circle
-                    cx="50" cy="50" r="42" fill="none" stroke="url(#ringGrad)" strokeWidth="9" strokeLinecap="round"
-                    strokeDasharray={2 * Math.PI * 42}
-                    initial={{ strokeDashoffset: 2 * Math.PI * 42 }}
-                    animate={{ strokeDashoffset: 2 * Math.PI * 42 * (1 - (total?.pct ?? 0) / 100) }}
-                    transition={{ duration: 1.1, ease: "easeOut" }}
-                  />
-                  <defs>
-                    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="#bef264" />
-                      <stop offset="100%" stopColor="#22c55e" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  {total ? (
-                    <>
-                      <span className="text-2xl font-bold leading-none sm:text-3xl">{total.pct}<span className="text-base">%</span></span>
-                      <span className="mt-0.5 text-[10px] font-medium text-emerald-50/60">{`${total.earned}/${total.target} jam`}</span>
-                    </>
-                  ) : (
-                    <Skeleton className="h-6 w-12 rounded" />
-                  )}
+              {total ? (
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <div className="text-4xl font-bold leading-none sm:text-5xl">{total.pct}%</div>
+                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${RAG_UI[ragOf(total.earned, total.target)].pill}`}>{RAG_UI[ragOf(total.earned, total.target)].label}</span>
                 </div>
-              </div>
+              ) : (
+                <Skeleton className="h-10 w-16" />
+              )}
             </div>
 
-            {/* Bar per kategori */}
-            <div className="relative z-10 mt-6 space-y-3.5">
+            {/* Bar overall */}
+            <div className="relative z-10 mt-5">
+              {total ? (
+                <div className="relative h-9 rounded-full bg-black/20">
+                  <motion.div className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${RAG_UI[ragOf(total.earned, total.target)].fill}`} initial={{ width: 0 }} animate={{ width: `${Math.max(total.pct, 5)}%` }} transition={{ duration: 1, ease: "easeOut" }} />
+                  <span className="absolute left-1.5 top-1/2 -translate-y-1/2 rounded-full bg-black/55 px-3.5 py-1.5 text-[12.5px] font-semibold text-white backdrop-blur-sm">{total.earned} / {total.target} jam</span>
+                </div>
+              ) : (
+                <Skeleton className="h-9 w-full rounded-full" />
+              )}
+            </div>
+
+            {/* Rincian per kategori */}
+            <div className="relative z-10 mt-5 space-y-4 rounded-2xl bg-green-950/25 p-4 sm:p-5">
               {!me && [0, 1, 2].map((i) => (
-                <div key={`sk-${i}`} className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-3.5">
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="h-10 w-10 rounded-xl" />
-                    <div className="flex-1">
-                      <Skeleton className="h-3.5 w-44" />
-                      <Skeleton className="mt-2.5 h-2.5 w-full rounded-full" />
-                    </div>
-                  </div>
+                <div key={`sk-${i}`}>
+                  <Skeleton className="h-4 w-52" />
+                  <Skeleton className="mt-2.5 h-8 w-full rounded-full" />
                 </div>
               ))}
               {me && buckets.map((b, i) => {
-                const ui = BUCKET_UI[b.key];
-                const Icon = ui?.icon ?? GraduationCap;
+                const started = b.earned > 0;
+                const ui = RAG_UI[ragOf(b.earned, b.target)];
                 return (
-                  <button
-                    key={b.key}
-                    onClick={() => go(`/learning?bucket=${b.key}`)}
-                    className="group block w-full rounded-2xl border border-white/[0.07] bg-white/[0.04] p-3.5 text-left transition-all hover:border-white/15 hover:bg-white/[0.07]"
-                  >
+                  <button key={b.key} onClick={() => go(`/learning?bucket=${b.key}`)} className="group -mx-2 block w-full rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-white/10">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-[14px] font-semibold sm:text-[15px]">{SHORT_LABEL[b.key] ?? b.label}</span>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${ui.pill}`}>{ui.label}</span>
+                        <ArrowUpRight className="h-4 w-4 text-white/50 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-white" />
+                      </div>
+                    </div>
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#06210a]" style={{ backgroundImage: `linear-gradient(135deg, ${ui?.from}, ${ui?.to})` }}>
-                        <Icon className="h-5 w-5" />
+                      <div className="relative h-8 flex-1 overflow-hidden rounded-full bg-black/25">
+                        <motion.div
+                          className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${ui.fill}`}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${b.pct}%` }}
+                          transition={{ duration: 0.9, delay: 0.15 + i * 0.1, ease: "easeOut" }}
+                        />
+                        {started ? (
+                          <span className="absolute left-1.5 top-1/2 -translate-y-1/2 rounded-full bg-black/45 px-3 py-1 text-[12px] font-semibold text-white backdrop-blur-sm">{b.earned} / {b.target} jam</span>
+                        ) : (
+                          <span className="absolute inset-0 flex items-center justify-center text-[12px] font-medium text-white/70">{b.earned} / {b.target} jam</span>
+                        )}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-[13.5px] font-semibold">{SHORT_LABEL[b.key] ?? b.label}</span>
-                          <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/70">{ui?.tag}</span>
-                        </div>
-                        <div className="mt-2 flex items-center gap-2.5">
-                          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-black/30">
-                            <motion.div
-                              className="h-full rounded-full"
-                              style={{ backgroundImage: `linear-gradient(to right, ${ui?.from}, ${ui?.to})` }}
-                              initial={{ width: 0 }}
-                              animate={{ width: `${b.pct}%` }}
-                              transition={{ duration: 0.9, delay: 0.15 + i * 0.1, ease: "easeOut" }}
-                            />
-                          </div>
-                          <span className="w-16 shrink-0 text-right text-[11px] font-semibold text-emerald-50/70">{b.earned}/{b.target} jam</span>
-                          <span className="w-9 shrink-0 text-right text-[12px] font-bold">{b.pct}%</span>
-                        </div>
-                      </div>
-                      <ArrowUpRight className="h-4 w-4 shrink-0 text-white/30 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-white/70" />
+                      <span className="w-11 shrink-0 text-right text-[15px] font-bold text-white">{b.pct}%</span>
                     </div>
                   </button>
                 );
@@ -418,50 +411,43 @@ export default function HomePage() {
           {/* ───── Kanan: IDP + Wallet (LIVE saldo) ───── */}
           <div className="flex flex-col gap-6">
             {/* IDP */}
-            <div className="relative flex-1 overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0c1c0e]/55 p-6 shadow-[0_24px_70px_-28px_rgba(0,0,0,0.9)] backdrop-blur-2xl">
-              {/* ornamen tablet/IDP asli (samar) */}
-              <div aria-hidden className="absolute inset-0 bg-cover bg-right opacity-[0.14]" style={{ backgroundImage: "url(/img/bg_idp_final.png)" }} />
-              <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[#0c1c0e]/70 via-transparent to-black/30" />
-              <div aria-hidden className="pointer-events-none absolute -left-12 -bottom-12 h-48 w-48 rounded-full blur-3xl" style={{ background: "radial-gradient(circle, rgba(45,212,191,0.1), transparent 65%)" }} />
+            <div className="relative flex-1 overflow-hidden rounded-[24px] bg-gradient-to-br from-emerald-600 to-green-800 p-6 shadow-[0_24px_70px_-28px_rgba(0,0,0,0.7)] ring-1 ring-white/10">
+              <div aria-hidden className="absolute inset-0 bg-cover bg-right opacity-[0.1]" style={{ backgroundImage: "url(/img/bg_idp_final.png)" }} />
               <div className="relative z-10 flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-green-600 text-[#06210a]"><FileText className="h-5.5 w-5.5" /></div>
-                <h3 className="text-xl font-bold leading-tight sm:text-2xl">Individual Development<br />Program (IDP)</h3>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15"><FileText className="h-5 w-5" /></div>
+                <h3 className="text-xl font-bold leading-tight sm:text-2xl">Individual Development Program (IDP)</h3>
               </div>
-              <div className="relative z-10 mt-4 space-y-2.5">
+              <div className="relative z-10 mt-5 space-y-1">
                 {[
-                  { judul: "Formulir IDP — Aspirasi Karir", desc: "Tahun 2026" },
+                  { judul: "Formulir IDP (Isikan Aspirasi Karir Pendek dan Panjang)", desc: "Tahun 2026" },
                   { judul: "Daftar IDP Saya", desc: "Tahun 2026" },
                 ].map((idp) => (
-                  <a key={idp.judul} href="/idp" className="group flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.04] p-3 transition-all hover:border-white/15 hover:bg-white/[0.08]">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5"><ExternalLink className="h-4.5 w-4.5" /></div>
+                  <a key={idp.judul} href="/idp" className="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-white/10">
+                    <ExternalLink className="h-5 w-5 shrink-0 text-white/90" />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[14px] font-semibold">{idp.judul}</div>
-                      <div className="text-[12px] text-white/40">{idp.desc}</div>
+                      <div className="text-[14px] font-semibold leading-snug">{idp.judul}</div>
+                      <div className="text-[12px] text-white/70">{idp.desc}</div>
                     </div>
-                    <ArrowUpRight className="h-4 w-4 text-white/30 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-white/70" />
+                    <ArrowUpRight className="h-4 w-4 shrink-0 text-white/30 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-white/80" />
                   </a>
                 ))}
               </div>
             </div>
 
             {/* Agro Wallet */}
-            <a href="/wishlist" className="group relative block overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0e2412]/55 p-6 shadow-[0_24px_70px_-28px_rgba(0,0,0,0.9)] backdrop-blur-2xl">
-              {/* ornamen koin asli (samar) */}
-              <div aria-hidden className="absolute inset-0 bg-cover bg-right opacity-[0.16]" style={{ backgroundImage: "url(/img/bg_wallet_final.png)" }} />
-              <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[#0e2412]/72 via-transparent to-black/25" />
-              <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full blur-3xl" style={{ background: "radial-gradient(circle, rgba(250,204,21,0.12), transparent 65%)" }} />
-              {/* shimmer */}
+            <a href="/wishlist" className="group relative block overflow-hidden rounded-[24px] bg-gradient-to-br from-green-700 to-emerald-900 p-6 shadow-[0_24px_70px_-28px_rgba(0,0,0,0.7)] ring-1 ring-white/10">
+              <div aria-hidden className="absolute inset-0 bg-cover bg-right opacity-[0.14]" style={{ backgroundImage: "url(/img/bg_wallet_final.png)" }} />
               <span aria-hidden className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
               <div className="relative z-10 flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 backdrop-blur"><Wallet className="h-5.5 w-5.5 text-amber-200" /></div>
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15"><Wallet className="h-5 w-5 text-amber-200" /></div>
                 <div>
                   <h3 className="text-xl font-bold sm:text-2xl">Agro Wallet</h3>
-                  <p className="text-[13px] text-emerald-50/70">Saldo pelatihan tahun ini</p>
+                  <p className="text-[13px] text-white/80">Saldo pelatihan tahun ini</p>
                 </div>
               </div>
-              <div className="relative z-10 mt-5 flex items-end justify-between">
+              <div className="relative z-10 mt-6 flex items-end justify-between">
                 {me ? (
-                  <span className="text-[11px] font-medium text-emerald-50/50">{me.member.poin} poin terkumpul</span>
+                  <span className="text-[11px] font-medium text-white/75">{me.member.poin} poin terkumpul</span>
                 ) : (
                   <Skeleton className="h-3 w-28" />
                 )}

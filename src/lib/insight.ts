@@ -4,7 +4,7 @@
  *
  * Sumber: Supabase Postgres — `_webinar`, `_movies`, `_pesan_direksi`, `_quotes`.
  */
-import { query } from "./db";
+import { query, queryOne } from "./db";
 import { clean, decodeEntities } from "./text";
 
 export interface VideoItem {
@@ -68,7 +68,31 @@ function richPesan(raw: string | null): string | null {
 }
 export interface QuoteItem { text: string; author: string }
 
+export interface DiskusiItem {
+  id: number; judul: string;
+  preview: string;       // ringkasan teks polos forum_desc
+  body: string | null;   // HTML kaya forum_desc
+  penulis: string; penulisImg: string | null;
+  tgl: string | null; balasan: number;
+}
+export interface DiskusiReply {
+  id: number; penulis: string; penulisImg: string | null;
+  tgl: string | null; body: string | null; // HTML kaya fc_desc
+}
+
 export interface Paged<T> { items: T[]; total: number }
+
+// Avatar member: hanya pakai URL absolut (mis. apis.holding-perkebunan.com/foto/…
+// yang publik). Path relatif/legacy diabaikan → UI jatuh ke inisial.
+function avatarUrl(img: string | null): string | null {
+  const t = (img ?? "").trim();
+  return /^https?:\/\//i.test(t) ? t : null;
+}
+// Ringkasan teks polos dari HTML (untuk preview kartu diskusi).
+function excerpt(raw: string | null, n = 160): string {
+  const text = decodeEntities(raw ?? "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/gi, " ").replace(/\s+/g, " ").trim();
+  return text.length > n ? text.slice(0, n).trimEnd() + "…" : text;
+}
 
 const yt = (id: string | null) => (id ? `https://img.youtube.com/vi/${id.trim()}/hqdefault.jpg` : null);
 const watch = (id: string | null) => (id ? `https://www.youtube.com/watch?v=${id.trim()}` : "#");
@@ -79,6 +103,170 @@ function search(q: string | undefined, ...cols: string[]): { sql: string; params
   if (!term) return { sql: "", params: [] };
   const like = `%${term}%`;
   return { sql: ` AND (${cols.map((c) => `${c} ILIKE ?`).join(" OR ")})`, params: cols.map(() => like) };
+}
+
+/** Daftar thread diskusi (`_forum`, status open) + jumlah balasan & penulis. */
+export async function getDiskusi(limit = 12, offset = 0, q?: string): Promise<Paged<DiskusiItem>> {
+  const s = search(q, "f.forum_name", "f.forum_desc");
+  const [rows, count] = await Promise.all([
+    query<{ id: number; judul: string; body: string | null; tgl: string | null; penulis: string | null; img: string | null; balasan: number }>(
+      `SELECT f.forum_id AS id, f.forum_name AS judul, f.forum_desc AS body,
+              f.forum_create_date AS tgl, m.member_name AS penulis, m.member_image AS img,
+              (SELECT COUNT(*) FROM _forum_chat c WHERE c.forum_id = f.forum_id AND c.fc_status = 'active') AS balasan
+         FROM _forum f LEFT JOIN _member m ON m.member_id = f.member_id
+        WHERE f.forum_status = 'open'${s.sql}
+        ORDER BY f.forum_create_date DESC NULLS LAST, f.forum_id DESC LIMIT ? OFFSET ?`,
+      [...s.params, limit, offset],
+    ),
+    query<{ n: number }>(`SELECT COUNT(*) AS n FROM _forum f WHERE f.forum_status = 'open'${s.sql}`, s.params),
+  ]);
+  return {
+    items: rows.map((r) => ({
+      id: r.id, judul: clean(r.judul) || "(Tanpa judul)",
+      preview: excerpt(r.body), body: richHtml(r.body) || null,
+      penulis: clean(r.penulis) || "Anonim", penulisImg: avatarUrl(r.img),
+      tgl: r.tgl, balasan: Number(r.balasan) || 0,
+    })),
+    total: count[0]?.n ?? 0,
+  };
+}
+
+/** Balasan satu thread diskusi (`_forum_chat`, status active), urut terlama→terbaru. */
+export async function getDiskusiReplies(forumId: number): Promise<DiskusiReply[]> {
+  const rows = await query<{ id: number; body: string | null; tgl: string | null; penulis: string | null; img: string | null }>(
+    `SELECT c.fc_id AS id, c.fc_desc AS body, c.fc_create_date AS tgl,
+            m.member_name AS penulis, m.member_image AS img
+       FROM _forum_chat c LEFT JOIN _member m ON m.member_id = c.member_id
+      WHERE c.forum_id = ? AND c.fc_status = 'active'
+      ORDER BY c.fc_create_date ASC, c.fc_id ASC`,
+    [forumId],
+  );
+  return rows.map((r) => ({
+    id: r.id, penulis: clean(r.penulis) || "Anonim", penulisImg: avatarUrl(r.img),
+    tgl: r.tgl, body: richHtml(r.body) || null,
+  }));
+}
+
+/**
+ * Tambah balasan ke thread diskusi. Input di-sanitasi (semua tag dibuang →
+ * disimpan plain-text, newline jadi <br>) agar aman dari stored-XSS karena
+ * jalur baca (richHtml) men-decode entity. `fc_id` dihitung manual (tabel tak
+ * punya sequence). `user_id` legacy = 0. Mengembalikan balasan baru, atau null
+ * bila thread tak ada / tertutup / teks kosong.
+ */
+export async function addDiskusiReply(forumId: number, memberId: number, text: string): Promise<DiskusiReply | null> {
+  const stored = text.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").trim().slice(0, 4000).replace(/\r\n|\r|\n/g, "<br>");
+  if (!stored) return null;
+
+  const forum = await queryOne<{ forum_id: number }>(`SELECT forum_id FROM _forum WHERE forum_id = ? AND forum_status = 'open'`, [forumId]);
+  if (!forum) return null;
+
+  const ins = await query<{ fc_id: number; tgl: string }>(
+    `INSERT INTO _forum_chat (fc_id, forum_id, user_id, member_id, fc_desc, fc_image, fc_status, fc_create_date)
+     VALUES ((SELECT COALESCE(MAX(fc_id), 0) + 1 FROM _forum_chat), ?, 0, ?, ?, '', 'active', NOW())
+     RETURNING fc_id, fc_create_date AS tgl`,
+    [forumId, memberId, stored],
+  );
+  const m = await queryOne<{ nama: string | null; img: string | null }>(`SELECT member_name AS nama, member_image AS img FROM _member WHERE member_id = ?`, [memberId]);
+  return {
+    id: ins[0].fc_id,
+    penulis: clean(m?.nama ?? null) || "Anonim",
+    penulisImg: avatarUrl(m?.img ?? null),
+    tgl: ins[0].tgl,
+    body: richHtml(stored) || null,
+  };
+}
+
+/* ── Chatroom (`_forum_group` = room, `_forum_group_chat` = pesan) ────────── */
+
+export interface ChatRoom {
+  id: number; nama: string; desc: string | null;
+  jumlah: number; // jumlah pesan (non-kosong)
+  terakhir: { text: string; penulis: string; tgl: string | null } | null;
+}
+export interface ChatMessage {
+  id: number; memberId: number;
+  penulis: string; penulisImg: string | null;
+  tgl: string | null; body: string | null; // HTML kaya fc_desc
+}
+
+// Pesan kosong (fc_desc blank) banyak di data legacy — disaring agar bubble tidak hampa.
+const CHAT_NONBLANK = `COALESCE(TRIM(c.fc_desc), '') <> ''`;
+
+/** Daftar room chat (`_forum_group`, status open) + pesan terakhir & jumlah pesan. */
+export async function getChatrooms(limit = 20, offset = 0, q?: string): Promise<Paged<ChatRoom>> {
+  const s = search(q, "g.forum_name");
+  const [rows, count] = await Promise.all([
+    query<{ id: number; nama: string | null; desc: string | null; jumlah: number; last_text: string | null; last_tgl: string | null; last_penulis: string | null }>(
+      `SELECT g.forum_id AS id, g.forum_name AS nama, g.forum_desc AS desc,
+              (SELECT COUNT(*) FROM _forum_group_chat c WHERE c.forum_id = g.forum_id AND c.fc_status = 'active' AND ${CHAT_NONBLANK}) AS jumlah,
+              lc.fc_desc AS last_text, lc.fc_create_date AS last_tgl, lm.member_name AS last_penulis
+         FROM _forum_group g
+         LEFT JOIN LATERAL (
+           SELECT c.fc_desc, c.fc_create_date, c.member_id FROM _forum_group_chat c
+            WHERE c.forum_id = g.forum_id AND c.fc_status = 'active' AND ${CHAT_NONBLANK}
+            ORDER BY c.fc_create_date DESC NULLS LAST, c.fc_id DESC LIMIT 1
+         ) lc ON TRUE
+         LEFT JOIN _member lm ON lm.member_id = lc.member_id
+        WHERE g.forum_status = 'open'${s.sql}
+        ORDER BY lc.fc_create_date DESC NULLS LAST, g.forum_id DESC LIMIT ? OFFSET ?`,
+      [...s.params, limit, offset],
+    ),
+    query<{ n: number }>(`SELECT COUNT(*) AS n FROM _forum_group g WHERE g.forum_status = 'open'${s.sql}`, s.params),
+  ]);
+  return {
+    items: rows.map((r) => ({
+      id: r.id, nama: clean(r.nama) || "(Tanpa nama)", desc: excerpt(r.desc, 80) || null,
+      jumlah: Number(r.jumlah) || 0,
+      terakhir: r.last_text != null ? { text: excerpt(r.last_text, 60), penulis: clean(r.last_penulis) || "Anonim", tgl: r.last_tgl } : null,
+    })),
+    total: count[0]?.n ?? 0,
+  };
+}
+
+/** Pesan satu room (`_forum_group_chat`, status active & non-kosong), urut terlama→terbaru. */
+export async function getChatMessages(forumId: number, afterId = 0): Promise<ChatMessage[]> {
+  const rows = await query<{ id: number; member_id: number; body: string | null; tgl: string | null; penulis: string | null; img: string | null }>(
+    `SELECT c.fc_id AS id, c.member_id, c.fc_desc AS body, c.fc_create_date AS tgl,
+            m.member_name AS penulis, m.member_image AS img
+       FROM _forum_group_chat c LEFT JOIN _member m ON m.member_id = c.member_id
+      WHERE c.forum_id = ? AND c.fc_status = 'active' AND ${CHAT_NONBLANK} AND c.fc_id > ?
+      ORDER BY c.fc_create_date ASC, c.fc_id ASC`,
+    [forumId, afterId],
+  );
+  return rows.map((r) => ({
+    id: r.id, memberId: r.member_id,
+    penulis: clean(r.penulis) || "Anonim", penulisImg: avatarUrl(r.img),
+    tgl: r.tgl, body: richHtml(r.body) || null,
+  }));
+}
+
+/**
+ * Kirim pesan ke room chat. Input disanitasi (tag dibuang → plain-text, newline
+ * jadi <br>) seperti `addDiskusiReply`. `fc_id` dihitung manual; `group_id` diambil
+ * dari room. Mengembalikan pesan baru, atau null bila room tak ada/tertutup/kosong.
+ */
+export async function addChatMessage(forumId: number, memberId: number, text: string): Promise<ChatMessage | null> {
+  const stored = text.replace(/<[^>]*>/g, "").replace(/[<>]/g, "").trim().slice(0, 4000).replace(/\r\n|\r|\n/g, "<br>");
+  if (!stored) return null;
+
+  const room = await queryOne<{ group_id: number | null }>(`SELECT group_id FROM _forum_group WHERE forum_id = ? AND forum_status = 'open'`, [forumId]);
+  if (!room) return null;
+
+  const ins = await query<{ fc_id: number; tgl: string }>(
+    `INSERT INTO _forum_group_chat (fc_id, forum_id, user_id, member_id, group_id, fc_desc, fc_image, fc_status, fc_create_date)
+     VALUES ((SELECT COALESCE(MAX(fc_id), 0) + 1 FROM _forum_group_chat), ?, 0, ?, ?, ?, '', 'active', NOW())
+     RETURNING fc_id, fc_create_date AS tgl`,
+    [forumId, memberId, room.group_id ?? 0, stored],
+  );
+  const m = await queryOne<{ nama: string | null; img: string | null }>(`SELECT member_name AS nama, member_image AS img FROM _member WHERE member_id = ?`, [memberId]);
+  return {
+    id: ins[0].fc_id, memberId,
+    penulis: clean(m?.nama ?? null) || "Anonim",
+    penulisImg: avatarUrl(m?.img ?? null),
+    tgl: ins[0].tgl,
+    body: richHtml(stored) || null,
+  };
 }
 
 export async function getWebinars(limit = 12, offset = 0, q?: string): Promise<Paged<VideoItem>> {

@@ -99,6 +99,22 @@ const INSIGHT = [
   { src: "/img/vlog.jpg", label: "Vlog", href: "/insight-hub/vlog" },
 ];
 
+// Logo anak perusahaan (file di public/img/logo-anper/) — ditampilkan di footer.
+const ANPER_LOGOS = [
+  "ptpn 1.png",
+  "logo ptpn 4.png",
+  "sgn.png",
+  "Sri pamela.png",
+  "Industri Karet Nusantara.webp",
+  "INL.png",
+  "RPN.png",
+  "LPP.png",
+  "kpbn.png",
+  "bionusa.png",
+  "kinra.jpg",
+  "agroculture_logo_hd.png",
+];
+
 interface NavItem { label: string; active?: boolean; href: string; dropdown?: { label: string; href: string }[] }
 const NAV: NavItem[] = [
   { label: "Home", active: true, href: "/home" },
@@ -607,6 +623,30 @@ export default function HomePage() {
           </div>
         </section>
       </main>
+
+      {/* Footer — logo anak perusahaan */}
+      <footer className="relative z-10 mx-auto max-w-[1200px] px-4 pb-16">
+        <div className="border-t border-white/10 pt-10">
+          <div className="text-center text-[13px] font-semibold uppercase tracking-[0.2em] text-white/60">
+            Anak Perusahaan
+          </div>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4 sm:gap-6">
+            {ANPER_LOGOS.map((name) => (
+              <div
+                key={name}
+                className="flex h-20 w-32 items-center justify-center rounded-xl bg-white px-4 py-3 shadow-[0_6px_20px_rgba(0,0,0,0.25)]"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/img/logo-anper/${encodeURIComponent(name)}`}
+                  alt={name.replace(/\.[^.]+$/, "")}
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </footer>
 
       {/* Degradasi hijau Agronow — replika .fixed-bottom-div dari agronow.co.id:
           fixed di 400px paling bawah viewport, di belakang konten (lewat stacking context `isolate` di root). */}

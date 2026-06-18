@@ -4,7 +4,7 @@
  */
 import { Video, MessageSquareQuote, Newspaper, MessagesSquare, Library, FileText, MessageCircle, Play, Clapperboard, Quote } from "lucide-react";
 
-export type SectionKind = "video" | "direksi" | "berita" | "article" | "library" | "quotes" | "soon";
+export type SectionKind = "video" | "direksi" | "berita" | "article" | "library" | "quotes" | "discussion" | "chatroom" | "soon";
 
 export interface SectionMeta {
   slug: string;
@@ -22,13 +22,13 @@ export const INSIGHT_SECTIONS: SectionMeta[] = [
     desc: "Pesan dan arahan langsung dari jajaran direksi." },
   { slug: "berita", title: "Berita Terkini", image: "/img/item12.jpg", icon: Newspaper, kind: "berita",
     desc: "Kabar dan berita terbaru seputar PTPN Group." },
-  { slug: "diskusi", title: "Diskusi", image: "/img/diskusi.jpg", icon: MessagesSquare, kind: "soon",
+  { slug: "diskusi", title: "Diskusi", image: "/img/diskusi.jpg", icon: MessagesSquare, kind: "discussion",
     desc: "Ruang berbagi ide dan tanya jawab antar karyawan." },
   { slug: "library", title: "Digital Library", image: "/img/library.jpg", icon: Library, kind: "library",
     desc: "Koleksi materi, e-book, podcast, dan referensi pembelajaran." },
   { slug: "article", title: "Article", image: "/img/article.jpg", icon: FileText, kind: "article",
     desc: "Artikel dan tulisan seputar perkebunan dan pengembangan diri." },
-  { slug: "chatroom", title: "Chatroom", image: "/img/chatroom.jpg", icon: MessageCircle, kind: "soon",
+  { slug: "chatroom", title: "Chatroom", image: "/img/chatroom.jpg", icon: MessageCircle, kind: "chatroom",
     desc: "Ngobrol santai dan kolaborasi real-time bersama rekan kerja." },
   { slug: "short-movie", title: "Short Movie", image: "/img/short-movie.jpg", icon: Clapperboard, kind: "video",
     desc: "Film pendek inspiratif pilihan." },

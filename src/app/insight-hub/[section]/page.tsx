@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
 import { VideoCard, VideoModal, type VideoCardData } from "@/components/InsightVideo";
-import { ArrowLeft, Quote as QuoteIcon, X, Eye, Search } from "lucide-react";
+import { ArrowLeft, Quote as QuoteIcon, X, Eye, Search, MessageSquare } from "lucide-react";
 import { SECTION_BY_SLUG } from "@/lib/insight-sections";
 
 interface DireksiItem { id: number; nama: string; jabatan: string; pesan: string | null; image: string | null; initials: string }
@@ -14,7 +14,9 @@ interface ArticleItem extends BeritaItem { views: number }
 interface QuoteItem { text: string; author: string }
 interface LibraryCat { id: number; name: string; alias: string; count: number }
 interface LibraryItem { id: number; title: string; alias: string; image: string | null; date: string | null; author: string | null; category: string | null; body: string | null }
-type Item = VideoCardData | DireksiItem | BeritaItem | ArticleItem | LibraryItem | QuoteItem;
+interface DiskusiItem { id: number; judul: string; preview: string; body: string | null; penulis: string; penulisImg: string | null; tgl: string | null; balasan: number }
+interface DiskusiReply { id: number; penulis: string; penulisImg: string | null; tgl: string | null; body: string | null }
+type Item = VideoCardData | DireksiItem | BeritaItem | ArticleItem | LibraryItem | QuoteItem | DiskusiItem;
 interface SectionData { kind: string; items: Item[]; total: number; categories?: LibraryCat[] }
 
 const fmtTgl = (s: string | null) => {
@@ -36,6 +38,7 @@ export default function InsightSectionPage() {
   const [direksi, setDireksi] = useState<DireksiItem | null>(null);
   const [berita, setBerita] = useState<BeritaItem | null>(null);
   const [library, setLibrary] = useState<LibraryItem | null>(null);
+  const [diskusi, setDiskusi] = useState<DiskusiItem | null>(null);
   const [categories, setCategories] = useState<LibraryCat[]>([]);
   const [category, setCategory] = useState("all"); // filter Digital Library
   const [qInput, setQInput] = useState(""); // teks di kotak cari
@@ -226,6 +229,26 @@ export default function InsightSectionPage() {
                   </button>
                 ))}
               </div>
+            ) : meta.kind === "discussion" ? (
+              <div className="mt-6 space-y-3">
+                {(items as DiskusiItem[]).map((d) => (
+                  <button key={d.id} type="button" onClick={() => setDiskusi(d)}
+                    className="group flex w-full items-start gap-3.5 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition-colors hover:border-emerald-500/60">
+                    <Avatar name={d.penulis} src={d.penulisImg} />
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-[14.5px] font-semibold leading-snug text-white group-hover:text-emerald-200">{d.judul}</p>
+                      {d.preview && <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-white/55">{d.preview}</p>}
+                      <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-white/45">
+                        <span className="font-medium text-white/65">{d.penulis}</span>
+                        <span>{fmtTgl(d.tgl)}</span>
+                        <span className="inline-flex items-center gap-1 text-emerald-300/80">
+                          <MessageSquare className="h-3.5 w-3.5" /> {d.balasan} balasan
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
             ) : (
               <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {(items as QuoteItem[]).map((q, i) => (
@@ -254,6 +277,161 @@ export default function InsightSectionPage() {
       {direksi && <DireksiModal d={direksi} onClose={() => setDireksi(null)} />}
       {berita && <BeritaModal b={berita} onClose={() => setBerita(null)} />}
       {library && <LibraryModal l={library} onClose={() => setLibrary(null)} />}
+      {diskusi && <DiskusiModal d={diskusi} onClose={() => setDiskusi(null)} />}
+    </div>
+  );
+}
+
+/** Avatar member — foto bila ada URL valid, jika gagal/null jatuh ke inisial. */
+function Avatar({ name, src, size = "md" }: { name: string; src: string | null; size?: "md" | "sm" }) {
+  const [failed, setFailed] = useState(false);
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
+  const dim = size === "sm" ? "h-8 w-8 text-[11px]" : "h-10 w-10 text-[13px]";
+  if (src && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={src} alt={name} onError={() => setFailed(true)}
+        className={`${dim} shrink-0 rounded-full object-cover ring-1 ring-white/10`} />
+    );
+  }
+  return (
+    <div className={`${dim} flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-green-800 font-bold text-white ring-1 ring-white/10`}>
+      {initials}
+    </div>
+  );
+}
+
+/** Modal diskusi — thread (judul + isi + penulis) lalu daftar balasan (di-fetch saat dibuka). */
+function DiskusiModal({ d, onClose }: { d: DiskusiItem; onClose: () => void }) {
+  const [replies, setReplies] = useState<DiskusiReply[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [count, setCount] = useState(d.balasan);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit() {
+    const body = text.trim();
+    if (!body || sending) return;
+    setSending(true); setError("");
+    try {
+      const r = await fetch("/api/diskusi/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forumId: d.id, text: body }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.reply) { setError(j?.error ?? "Gagal mengirim komentar."); return; }
+      setReplies((prev) => [...(prev ?? []), j.reply]);
+      setCount((c) => c + 1);
+      setText("");
+    } catch {
+      setError("Tidak dapat terhubung ke server.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetch(`/api/insight/diskusi?thread=${d.id}`)
+      .then((r) => r.json())
+      .then((j) => { if (alive) setReplies(Array.isArray(j.items) ? j.items : []); })
+      .catch(() => { if (alive) setReplies([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [d.id]);
+
+  const htmlCls = "text-[13.5px] leading-relaxed text-white/80 [&_a]:text-emerald-300 [&_a]:underline [&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-lg [&_p]:mb-2 [&_strong]:font-semibold [&_strong]:text-white";
+
+  return (
+    <div role="dialog" aria-modal="true" onClick={onClose}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/85 p-3 backdrop-blur-sm sm:p-6">
+      <div onClick={(e) => e.stopPropagation()} className="my-auto w-full max-w-2xl rounded-2xl border border-white/10 bg-[#1d1f1c] shadow-2xl">
+        {/* Header thread */}
+        <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <Avatar name={d.penulis} src={d.penulisImg} />
+            <div className="min-w-0">
+              <p className="text-[16px] font-bold leading-snug text-white">{d.judul}</p>
+              <p className="mt-0.5 text-[12.5px] text-white/45">{d.penulis} · {fmtTgl(d.tgl)}</p>
+            </div>
+          </div>
+          <button onClick={onClose} aria-label="Tutup" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Isi thread */}
+        <div className="border-b border-white/10 p-4">
+          {d.body
+            ? <div className={htmlCls} dangerouslySetInnerHTML={{ __html: d.body }} />
+            : <p className="text-[13px] text-white/50">Tidak ada deskripsi.</p>}
+        </div>
+
+        {/* Balasan */}
+        <div className="p-4">
+          <p className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-white/70">
+            <MessageSquare className="h-4 w-4 text-emerald-400" /> {count} Balasan
+          </p>
+          {loading ? (
+            <div className="space-y-3">
+              {[0, 1].map((i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+            </div>
+          ) : !replies || replies.length === 0 ? (
+            <p className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-center text-[13px] text-white/45">Belum ada balasan.</p>
+          ) : (
+            <div className="space-y-3">
+              {replies.map((r) => (
+                <div key={r.id} className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+                  <Avatar name={r.penulis} src={r.penulisImg} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] font-semibold text-white/85">{r.penulis} <span className="ml-1 font-normal text-white/40">{fmtTgl(r.tgl)}</span></p>
+                    {r.body
+                      ? <div className={`mt-1 ${htmlCls}`} dangerouslySetInnerHTML={{ __html: r.body }} />
+                      : <p className="mt-1 text-[13px] text-white/40">(pesan kosong)</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Form komentar */}
+          <form
+            onSubmit={(e) => { e.preventDefault(); submit(); }}
+            className="mt-4 border-t border-white/10 pt-4"
+          >
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
+              rows={3}
+              maxLength={4000}
+              placeholder="Tulis komentar kamu…"
+              className="w-full resize-y rounded-xl border border-white/12 bg-white/[0.04] p-3 text-[13.5px] text-white outline-none transition-colors placeholder:text-white/35 focus:border-emerald-500/60"
+            />
+            {error && <p className="mt-1.5 text-[12px] text-red-300">{error}</p>}
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-[11.5px] text-white/35">⌘/Ctrl + Enter untuk kirim</span>
+              <button
+                type="submit" disabled={sending || !text.trim()}
+                className="rounded-full bg-emerald-600 px-5 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sending ? "Mengirim…" : "Kirim Komentar"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

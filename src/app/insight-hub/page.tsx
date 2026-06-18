@@ -35,7 +35,7 @@ export default function InsightHubPage() {
         </p>
 
         <section className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-3">
-          {INSIGHT_SECTIONS.map((s) => <SectionCard key={s.slug} s={s} />)}
+          {INSIGHT_SECTIONS.filter((s) => s.slug !== "inspirasi").map((s) => <SectionCard key={s.slug} s={s} />)}
         </section>
       </main>
     </div>

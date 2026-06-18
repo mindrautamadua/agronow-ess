@@ -1,4 +1,4 @@
-import { getWebinars, getMovies, getDireksi, getQuotes, getBerita, getArticle, getLibrary, getLibraryCategories } from "@/lib/insight";
+import { getWebinars, getMovies, getDireksi, getQuotes, getBerita, getArticle, getLibrary, getLibraryCategories, getDiskusi, getDiskusiReplies, getChatrooms, getChatMessages } from "@/lib/insight";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +33,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ section:
       }
       case "inspirasi":
         return Response.json({ kind: "quotes", ...(await getQuotes(PAGE_SIZE, offset, q)) });
-      // diskusi, chatroom — belum ada sumber data.
+      case "diskusi": {
+        const thread = sp.get("thread");
+        if (thread) return Response.json({ kind: "diskusi-replies", items: await getDiskusiReplies(Number(thread)) });
+        return Response.json({ kind: "discussion", ...(await getDiskusi(PAGE_SIZE, offset, q)) });
+      }
+      case "chatroom": {
+        const room = sp.get("room");
+        if (room) {
+          const after = Math.max(0, Number(sp.get("after") ?? 0) || 0);
+          return Response.json({ kind: "chat-messages", items: await getChatMessages(Number(room), after) });
+        }
+        return Response.json({ kind: "chatroom", ...(await getChatrooms(PAGE_SIZE, offset, q)) });
+      }
       default:
         return Response.json({ kind: "soon", items: [], total: 0 });
     }

@@ -214,7 +214,7 @@ export default function HomePage() {
   const buckets = me?.learning.buckets ?? [];
 
   return (
-    <div className="relative min-h-screen bg-[#19191B] text-white">
+    <div className="relative isolate min-h-screen bg-[#19191B] text-white">
       {/* ───── Header (fixed: transparan di atas hero, solid saat scroll) ───── */}
       <header className={`fixed inset-x-0 top-0 z-30 transition-colors duration-300 ${scrolled ? "border-b border-white/10 bg-[#19191B]/95 shadow-lg backdrop-blur" : ""}`}>
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 py-5">
@@ -558,7 +558,13 @@ export default function HomePage() {
         </section>
       </main>
 
-      <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-0 -z-10 h-96" style={{ backgroundImage: "linear-gradient(to top, #2E7409, #19191B)" }} />
+      {/* Degradasi hijau Agronow — replika .fixed-bottom-div dari agronow.co.id:
+          fixed di 400px paling bawah viewport, di belakang konten (lewat stacking context `isolate` di root). */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-x-0 bottom-0 -z-10 h-[400px]"
+        style={{ backgroundImage: "linear-gradient(to top, #2E7409, #19191B)" }}
+      />
     </div>
   );
 }

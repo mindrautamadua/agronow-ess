@@ -165,21 +165,7 @@ export default function InsightSectionPage() {
             ) : meta.kind === "direksi" ? (
               <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {(items as DireksiItem[]).map((d) => (
-                  <button key={d.id} type="button" onClick={() => setDireksi(d)}
-                    className="group block overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] text-left">
-                    {d.image ? (
-                      <div className="overflow-hidden">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={d.image} alt={d.nama} className="w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                      </div>
-                    ) : (
-                      <div className="flex aspect-[3/4] flex-col items-center justify-center gap-3 bg-gradient-to-br from-emerald-600 to-green-800 p-6 text-center">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/15 text-2xl font-bold">{d.initials}</div>
-                        <p className="text-[15px] font-semibold">{d.nama}</p>
-                        <p className="text-[12px] text-white/80">{d.jabatan}</p>
-                      </div>
-                    )}
-                  </button>
+                  <DireksiCard key={d.id} d={d} onOpen={() => setDireksi(d)} />
                 ))}
               </div>
             ) : meta.kind === "library" ? (
@@ -358,6 +344,34 @@ function BeritaModal({ b, onClose }: { b: BeritaItem; onClose: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Kartu direksi — foto poster; jatuh ke kartu inisial bila tak ada gambar ATAU
+ * gambar gagal dimuat (mis. host `insight.agronow.co.id` tak terjangkau publik),
+ * supaya tidak pernah menampilkan ikon broken.
+ */
+function DireksiCard({ d, onOpen }: { d: DireksiItem; onOpen: () => void }) {
+  const [failed, setFailed] = useState(false);
+  const showImg = !!d.image && !failed;
+  return (
+    <button type="button" onClick={onOpen}
+      className="group block overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] text-left">
+      {showImg ? (
+        <div className="overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={d.image!} alt={d.nama} onError={() => setFailed(true)}
+            className="w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        </div>
+      ) : (
+        <div className="flex aspect-[3/4] flex-col items-center justify-center gap-3 bg-gradient-to-br from-emerald-600 to-green-800 p-6 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/15 text-2xl font-bold">{d.initials}</div>
+          <p className="text-[15px] font-semibold">{d.nama}</p>
+          <p className="text-[12px] text-white/80">{d.jabatan}</p>
+        </div>
+      )}
+    </button>
   );
 }
 

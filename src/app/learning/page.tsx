@@ -3,8 +3,9 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
-import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck, X, ExternalLink, ArrowUpRight } from "lucide-react";
+import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck, X, ExternalLink, ArrowUpRight, FileText, PlayCircle, ChevronRight, Download } from "lucide-react";
 
 /** Logo LinkedIn (lucide tidak menyediakan ikon brand ini). */
 function LinkedinMark({ className }: { className?: string }) {
@@ -26,6 +27,14 @@ interface Data {
   summary: { total: { earned: number; target: number; pct: number }; buckets: Bucket[]; totalClasses: number; certificates: number };
   classes: LClass[];
   member?: { name: string | null; email: string | null };
+}
+interface ClassMateri { type: string; title: string; url: string | null; isVideo: boolean }
+interface ClassModule { name: string; start: string | null; end: string | null; materi: ClassMateri[] }
+interface ClassDetail {
+  crm_id: number; name: string; desc: string | null; moduleDesc: string | null;
+  modules: ClassModule[]; certificate: string | null; scorePre: number | null; scorePost: number | null;
+  jpl: number; methodLabel: string | null; date_start: string | null; date_end: string | null;
+  verified: boolean; has_certificate: boolean;
 }
 
 // Belajar Mandiri terhubung ke LinkedIn Learning. Katalog ditautkan langsung
@@ -71,6 +80,24 @@ function LearningInner() {
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState(false);
 
+  // Detail kelas (modul + sertifikat) — di-fetch saat sebuah row diklik.
+  const [openCrm, setOpenCrm] = useState<number | null>(null);
+  const [detail, setDetail] = useState<ClassDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailErr, setDetailErr] = useState(false);
+
+  function openDetail(crmId: number) {
+    setOpenCrm(crmId);
+    setDetail(null);
+    setDetailErr(false);
+    setDetailLoading(true);
+    fetch(`/api/learning/${crmId}`)
+      .then((r) => r.json())
+      .then((d) => { d.detail ? setDetail(d.detail) : setDetailErr(true); })
+      .catch(() => setDetailErr(true))
+      .finally(() => setDetailLoading(false));
+  }
+
   useEffect(() => { setFilter(paramFilter(params)); }, [params]);
   useEffect(() => {
     fetch("/api/learning").then((r) => r.json()).then((d) => { d.summary ? setData(d) : setErr(true); }).catch(() => setErr(true));
@@ -89,7 +116,8 @@ function LearningInner() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#19191B] text-white">
+    <div className="relative isolate min-h-screen bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader active="Progres Pembelajaran" />
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20">
@@ -235,10 +263,15 @@ function LearningInner() {
                 const meta = c.bucket ? BUCKET_META[c.bucket] : null;
                 const Icon = meta?.icon ?? GraduationCap;
                 return (
-                  <div key={c.crm_id} className="flex items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <button
+                    key={c.crm_id}
+                    type="button"
+                    onClick={() => openDetail(c.crm_id)}
+                    className="group flex w-full items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition-colors hover:border-emerald-500/50 hover:bg-white/[0.05]"
+                  >
                     <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${meta?.accent ?? "from-slate-500 to-slate-700"}`}><Icon className="h-5 w-5" /></div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[15px] font-semibold leading-snug">{c.name}</p>
+                      <p className="text-[15px] font-semibold leading-snug group-hover:text-emerald-200">{c.name}</p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-white/55">
                         <span>{c.methodLabel ?? meta?.short ?? "Lainnya"}</span>
                         <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {c.jpl} JPL</span>
@@ -250,13 +283,157 @@ function LearningInner() {
                         {!c.verified && <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/50">Belum diverifikasi</span>}
                       </div>
                     </div>
-                  </div>
+                    <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-white/30 transition-transform group-hover:translate-x-0.5 group-hover:text-white/70" />
+                  </button>
                 );
               })}
             </section>
           </>
         )}
       </main>
+
+      {openCrm != null && (
+        <ClassDetailModal
+          loading={detailLoading}
+          err={detailErr}
+          detail={detail}
+          onClose={() => setOpenCrm(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Modal detail kelas — daftar modul + materi, dan sertifikat. */
+function ClassDetailModal({ loading, err, detail, onClose }: { loading: boolean; err: boolean; detail: ClassDetail | null; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+
+  return (
+    <div role="dialog" aria-modal="true" onClick={onClose}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/85 p-3 backdrop-blur-sm sm:p-6">
+      <div onClick={(e) => e.stopPropagation()} className="my-auto w-full max-w-2xl rounded-2xl border border-white/10 bg-[#1d1f1c] shadow-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
+          <div className="min-w-0">
+            <p className="text-[16px] font-bold leading-snug text-white">{detail?.name ?? (loading ? "Memuat…" : "Detail Kelas")}</p>
+            {detail && (
+              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-white/45">
+                {detail.methodLabel && <span>{detail.methodLabel}</span>}
+                <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {detail.jpl} JPL</span>
+                {fmtDate(detail.date_start) && <span>{fmtDate(detail.date_start)}{fmtDate(detail.date_end) ? ` – ${fmtDate(detail.date_end)}` : ""}</span>}
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} aria-label="Tutup" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-5 p-4">
+          {loading && (
+            <>
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-20 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </>
+          )}
+          {err && <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">Gagal memuat detail kelas.</p>}
+
+          {detail && (
+            <>
+              {/* Nilai pre/post */}
+              {(detail.scorePre != null || detail.scorePost != null) && (
+                <section className="flex flex-wrap gap-3">
+                  {detail.scorePre != null && (
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
+                      <p className="text-[11px] text-white/45">Pre-test</p>
+                      <p className="text-[18px] font-bold text-white">{detail.scorePre}</p>
+                    </div>
+                  )}
+                  {detail.scorePost != null && (
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
+                      <p className="text-[11px] text-white/45">Post-test</p>
+                      <p className="text-[18px] font-bold text-white">{detail.scorePost}</p>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* Modul */}
+              <section>
+                <h4 className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-white/70">
+                  <FileText className="h-4 w-4 text-emerald-400" /> Modul Pembelajaran
+                </h4>
+                {detail.modules.length === 0 ? (
+                  <p className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-center text-[13px] text-white/45">Belum ada modul untuk kelas ini.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {detail.modules.map((mod, i) => (
+                      <div key={i} className="rounded-xl border border-white/10 bg-white/[0.02] p-3.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-[14px] font-semibold text-white">{mod.name}</p>
+                          {(mod.start || mod.end) && (
+                            <span className="shrink-0 text-[11.5px] text-white/40">{fmtDate(mod.start)}{mod.end ? ` – ${fmtDate(mod.end)}` : ""}</span>
+                          )}
+                        </div>
+                        {mod.materi.length > 0 && (
+                          <ul className="mt-2.5 space-y-1.5">
+                            {mod.materi.map((mt, j) => {
+                              const MtIcon = mt.isVideo ? PlayCircle : FileText;
+                              const inner = (
+                                <span className="flex items-center gap-2.5">
+                                  <MtIcon className={`h-4 w-4 shrink-0 ${mt.isVideo ? "text-rose-300" : "text-sky-300"}`} />
+                                  <span className="min-w-0 flex-1 truncate text-[13px] text-white/80">{mt.title}</span>
+                                  {mt.url && <ExternalLink className="h-3.5 w-3.5 shrink-0 text-white/40" />}
+                                </span>
+                              );
+                              return (
+                                <li key={j}>
+                                  {mt.url ? (
+                                    <a href={mt.url} target="_blank" rel="noopener noreferrer"
+                                      className="block rounded-lg px-2.5 py-2 transition-colors hover:bg-white/[0.06]">
+                                      {inner}
+                                    </a>
+                                  ) : (
+                                    <div className="rounded-lg px-2.5 py-2">{inner}</div>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Sertifikat */}
+              <section>
+                <h4 className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-white/70">
+                  <Award className="h-4 w-4 text-amber-400" /> Sertifikat
+                </h4>
+                {detail.certificate ? (
+                  <a href={detail.certificate} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-full bg-amber-500/90 px-5 py-2.5 text-[13px] font-semibold text-[#3a2700] transition-colors hover:bg-amber-400">
+                    <Download className="h-4 w-4" /> Lihat / Unduh Sertifikat
+                  </a>
+                ) : (
+                  <p className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-[13px] text-white/45">
+                    {detail.has_certificate ? "Sertifikat sedang diproses." : "Sertifikat belum tersedia untuk kelas ini."}
+                  </p>
+                )}
+              </section>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

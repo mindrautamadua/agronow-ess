@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
 import { ChevronDown, Search, BookOpen } from "lucide-react";
 
@@ -28,7 +29,8 @@ export default function FaqPage() {
   const filtered = terms.filter((t) => !q || t.name.toLowerCase().includes(q.toLowerCase()) || t.desc.toLowerCase().includes(q.toLowerCase()));
 
   return (
-    <div className="min-h-screen bg-[#19191B] text-white">
+    <div className="relative isolate min-h-screen bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader active="Bantuan" />
 
       <main className="mx-auto max-w-[1000px] px-4 pb-20">

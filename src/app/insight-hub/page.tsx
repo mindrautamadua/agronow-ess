@@ -1,6 +1,7 @@
 "use client";
 
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { INSIGHT_SECTIONS, type SectionMeta } from "@/lib/insight-sections";
 
 /** Kartu section → sub-halaman. Foto bila ada, selain itu tile gradien. */
@@ -30,7 +31,8 @@ function SectionCard({ s }: { s: SectionMeta }) {
 
 export default function InsightHubPage() {
   return (
-    <div className="min-h-screen bg-[#19191B] text-white">
+    <div className="relative isolate min-h-screen bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader active="Insight Hub" />
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20">

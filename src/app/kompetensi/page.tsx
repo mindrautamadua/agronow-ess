@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { Radar as RadarIcon, Target, TrendingUp, GraduationCap, Clock, ArrowRight, Sparkles } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { Skeleton } from "@/components/Skeleton";
 
 // ── Tipe dari /api/skillgap ──
@@ -33,7 +34,8 @@ export default function KompetensiPage() {
   const gaps = useMemo(() => (data?.axes ?? []).filter((a) => a.remaining > 0).sort((a, b) => b.remaining - a.remaining), [data]);
 
   return (
-    <div className="min-h-screen bg-[#19191B] text-white">
+    <div className="relative isolate min-h-screen bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader active="Peta Kompetensi" />
 
       <main className="mx-auto max-w-[920px] px-4 py-6 sm:py-8">

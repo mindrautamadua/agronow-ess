@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
 import {
   Mail, Phone, MapPin, Briefcase, Building2, Calendar, User as UserIcon,
@@ -59,7 +60,8 @@ export default function ProfilePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#19191B] text-white">
+    <div className="relative isolate min-h-screen bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader active="Profile" />
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20">

@@ -1,6 +1,7 @@
 "use client";
 
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { Gamepad2 } from "lucide-react";
 
 const GAMES = [
@@ -14,7 +15,8 @@ const GAMES = [
 
 export default function GamesPage() {
   return (
-    <div className="min-h-screen bg-[#19191B] text-white">
+    <div className="relative isolate min-h-screen bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader active="Games" />
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20">

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, Send, Loader2, Bot, User as UserIcon } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 
 interface Msg { role: "user" | "assistant"; content: string }
 
@@ -54,7 +55,8 @@ export default function CoachPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#19191B] text-white">
+    <div className="relative isolate flex min-h-screen flex-col bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader active="AI Coach" />
 
       <main className="mx-auto flex w-full max-w-[760px] flex-1 flex-col px-4 py-5">

@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { enablePush, pushPermission, PUSH_MESSAGE } from "@/components/PushSetup";
 import { ArrowLeft, Search, Send, X, BellRing, MessageSquarePlus } from "lucide-react";
 
@@ -131,8 +132,9 @@ function ChatInner() {
   const showThread = !!friend; // mobile: tampilkan thread bila ada teman aktif
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-[#19191B] text-white">
-      <AppHeader active="Insight Hub" />
+    <div className="relative isolate flex h-[100dvh] flex-col bg-[#19191B] text-white">
+      <BottomGradient />
+      <AppHeader active="Chat" />
       <div className="mx-auto flex w-full max-w-[1100px] flex-1 overflow-hidden px-0 sm:px-4 sm:py-4">
         <div className="flex w-full overflow-hidden rounded-none border-white/10 sm:rounded-2xl sm:border">
           {/* ── Daftar percakapan ── */}

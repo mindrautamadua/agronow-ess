@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
 import { Heart, Clock, BookOpen, Plus, Search } from "lucide-react";
 
@@ -49,7 +50,8 @@ export default function WishlistPage() {
   const katalog = (data?.katalog ?? []).filter((c) => !q || c.judul.toLowerCase().includes(q.toLowerCase()));
 
   return (
-    <div className="min-h-screen bg-[#19191B] text-white">
+    <div className="relative isolate min-h-screen bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader />
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20">

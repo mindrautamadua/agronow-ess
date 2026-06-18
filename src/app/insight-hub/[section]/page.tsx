@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { useParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
 import { VideoCard, VideoModal, type VideoCardData } from "@/components/InsightVideo";
 import { ArrowLeft, Quote as QuoteIcon, X, Eye, Search, MessageSquare, Heart, Pencil } from "lucide-react";
@@ -87,7 +88,8 @@ export default function InsightSectionPage() {
   const hasMore = !isSoon && items.length < total;
 
   return (
-    <div className="min-h-screen bg-[#19191B] text-white">
+    <div className="relative isolate min-h-screen bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader active="Insight Hub" />
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20">

@@ -12,6 +12,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { Skeleton } from "@/components/Skeleton";
 import { ArrowLeft, MessageCircle, Search, X, Send, MessagesSquare, PenSquare } from "lucide-react";
 
@@ -110,7 +111,8 @@ function ChatroomInner() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-[#19191B] text-white">
+    <div className="relative isolate flex h-screen flex-col bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader active="Insight Hub" />
 
       <main className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col overflow-hidden px-0 sm:px-4 sm:pb-4">

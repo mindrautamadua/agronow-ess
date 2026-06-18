@@ -1,6 +1,7 @@
 "use client";
 
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { GraduationCap, Users, Briefcase, Target, Heart, BarChart3 } from "lucide-react";
 
 const STEPS = [
@@ -14,7 +15,8 @@ const STEPS = [
 
 export default function PanduanPage() {
   return (
-    <div className="min-h-screen bg-[#19191B] text-white">
+    <div className="relative isolate min-h-screen bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader active="Bantuan" />
 
       <main className="mx-auto max-w-[1000px] px-4 pb-20">

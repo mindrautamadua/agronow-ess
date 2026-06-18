@@ -486,8 +486,8 @@ export default function HomePage() {
           {/* ───── Kanan: IDP + Wallet (LIVE saldo) ───── */}
           <div className="flex flex-col gap-6">
             {/* IDP */}
-            <div className="relative flex-1 overflow-hidden rounded-[24px] bg-gradient-to-br from-emerald-600 to-green-800 p-6 shadow-[0_24px_70px_-28px_rgba(0,0,0,0.7)] ring-1 ring-white/10">
-              <div aria-hidden className="absolute inset-0 bg-cover bg-right opacity-[0.1]" style={{ backgroundImage: "url(/img/bg_idp_final.png)" }} />
+            <div className="relative flex flex-1 flex-col justify-center overflow-hidden rounded-[24px] bg-gradient-to-br from-emerald-600 to-green-800 p-6 shadow-[0_24px_70px_-28px_rgba(0,0,0,0.7)] ring-1 ring-white/10">
+              <div aria-hidden className="absolute inset-0 bg-cover bg-right opacity-30" style={{ backgroundImage: "url(/img/bg_idp_final.png)" }} />
               <div className="relative z-10 flex items-center gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15"><FileText className="h-5 w-5" /></div>
                 <h3 className="text-xl font-bold leading-tight sm:text-2xl">Individual Development Program (IDP)</h3>

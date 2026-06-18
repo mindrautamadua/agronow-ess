@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Flame, CheckCircle2, XCircle, Sparkles, Trophy, BookOpen, ArrowRight, Loader2, CalendarDays } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { Skeleton } from "@/components/Skeleton";
 
 // ── Tipe data dari /api/microlearning ──
@@ -109,7 +110,8 @@ export default function HarianPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#19191B] text-white">
+    <div className="relative isolate min-h-screen bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader active="Belajar Harian" />
 
       <main className="mx-auto max-w-[720px] px-4 py-6 sm:py-8">

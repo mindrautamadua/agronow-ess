@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AppHeader from "@/components/AppHeader";
+import BottomGradient from "@/components/BottomGradient";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
 import { Target, Plus, FileText, Clock, CheckCircle2, AlertCircle, X, Loader2, Info, Upload } from "lucide-react";
 
@@ -37,7 +38,8 @@ export default function IdpPage() {
   const year = data?.year ?? new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-[#19191B] text-white">
+    <div className="relative isolate min-h-screen bg-[#19191B] text-white">
+      <BottomGradient />
       <AppHeader />
 
       <main className="mx-auto max-w-[1000px] px-4 pb-20">

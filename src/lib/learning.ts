@@ -10,7 +10,7 @@
  * "Earned" per kategori = total JPL kelas member yang terverifikasi (is_verified='1'),
  * di-cap maksimal sebesar target kategori (sesuai perilaku aplikasi asli).
  */
-import { query } from "./db";
+import { query, queryOne } from "./db";
 import { clean } from "./text";
 
 export type BucketKey = "formal" | "social" | "experiential";
@@ -129,6 +129,104 @@ export async function getLearningSummary(memberId: number, year = currentYear())
     buckets,
     totalClasses: Number(totalClasses),
     certificates: Number(certificates),
+  };
+}
+
+// Base URL file dokumen materi (Media berupa nama file, mis. "32Overview.pdf").
+// Materi video menyimpan URL penuh, jadi tak butuh base ini. Set lewat env bila
+// dokumen materi perlu bisa diunduh; kosong → dokumen tampil tanpa tautan.
+const MATERI_DOC_BASE = (process.env.CLASSROOM_MATERI_BASE ?? "").replace(/\/+$/, "");
+
+export interface ClassMateri { type: string; title: string; url: string | null; isVideo: boolean }
+export interface ClassModule { name: string; start: string | null; end: string | null; materi: ClassMateri[] }
+export interface ClassDetail {
+  crm_id: number;
+  name: string;
+  desc: string | null;
+  moduleDesc: string | null;
+  modules: ClassModule[];
+  certificate: string | null;
+  scorePre: number | null;
+  scorePost: number | null;
+  jpl: number;
+  methodLabel: string | null;
+  date_start: string | null;
+  date_end: string | null;
+  verified: boolean;
+  has_certificate: boolean;
+}
+
+/** URL materi: video & tautan absolut dipakai apa adanya; nama file dokumen butuh base. */
+function materiUrl(media: string | null | undefined): string | null {
+  const m = (media ?? "").trim();
+  if (!m) return null;
+  if (/^https?:\/\//i.test(m)) return m;
+  return MATERI_DOC_BASE ? `${MATERI_DOC_BASE}/${m}` : null;
+}
+
+/** Detail satu kelas member: deskripsi, daftar modul + materi, dan sertifikat. */
+export async function getClassDetail(memberId: number, crmId: number): Promise<ClassDetail | null> {
+  const row = await queryOne<{
+    crm_id: number; cr_name: string; cr_desc: string | null; cr_module: string | null;
+    berkas_sertifikat: string | null; cr_has_certificate: number | null;
+    nilai_pre_test: number | null; nilai_post_test: number | null;
+    metode_nama: string | null; jpl: number | null;
+    cr_date_start: string | null; cr_date_end: string | null; is_verified: string | null;
+  }>(
+    `SELECT m.crm_id, c.cr_name, c.cr_desc, c.cr_module,
+            m.berkas_sertifikat, c.cr_has_certificate,
+            m.nilai_pre_test, m.nilai_post_test, m.is_verified,
+            lk.nama AS metode_nama, c.jpl_learning_kategori1 AS jpl,
+            c.cr_date_start, c.cr_date_end
+       FROM _classroom_member m
+       JOIN _classroom c ON c.cr_id = m.cr_id
+       LEFT JOIN _learning_kategori lk ON lk.id = c.id_learning_kategori1
+      WHERE m.crm_id = ? AND m.member_id = ?`,
+    [crmId, memberId],
+  );
+  if (!row) return null;
+
+  let moduleDesc: string | null = null;
+  const modules: ClassModule[] = [];
+  try {
+    const j = JSON.parse(row.cr_module || "{}") as {
+      Desc?: string | null;
+      Module?: Array<{ ModuleName?: string; ModuleStart?: string; ModuleEnd?: string; Materi?: Array<{ Type?: string; ContentName?: string; Media?: string; Status?: string }> }>;
+    };
+    moduleDesc = clean(j.Desc) || null;
+    for (const mod of j.Module ?? []) {
+      const materi: ClassMateri[] = (mod.Materi ?? [])
+        .filter((x) => (x.Status ?? "active") !== "inactive")
+        .map((x) => {
+          const isVideo = (x.Type ?? "").toLowerCase() === "video";
+          return { type: x.Type ?? "document", title: clean(x.ContentName) || "(tanpa judul)", url: materiUrl(x.Media), isVideo };
+        });
+      modules.push({
+        name: clean(mod.ModuleName) || "Modul",
+        start: mod.ModuleStart || null,
+        end: mod.ModuleEnd || null,
+        materi,
+      });
+    }
+  } catch { /* cr_module bukan JSON valid → abaikan */ }
+
+  const cert = (row.berkas_sertifikat ?? "").trim();
+
+  return {
+    crm_id: row.crm_id,
+    name: clean(row.cr_name),
+    desc: clean(row.cr_desc) || null,
+    moduleDesc,
+    modules,
+    certificate: cert || null,
+    scorePre: row.nilai_pre_test == null ? null : Number(row.nilai_pre_test),
+    scorePost: row.nilai_post_test == null ? null : Number(row.nilai_post_test),
+    jpl: Number(row.jpl ?? 0),
+    methodLabel: row.metode_nama ? clean(row.metode_nama) : null,
+    date_start: row.cr_date_start,
+    date_end: row.cr_date_end,
+    verified: row.is_verified === "1",
+    has_certificate: !!cert || row.cr_has_certificate === 1,
   };
 }
 

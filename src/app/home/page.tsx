@@ -343,7 +343,14 @@ export default function HomePage() {
           {CAROUSEL.map((c, i) => (
             <div key={i} className={`absolute inset-0 transition-opacity duration-1000 ${i === slide ? "opacity-100" : "pointer-events-none opacity-0"}`}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={c.image} alt={`Slide ${i + 1}`} className="h-full w-full object-cover" />
+              <motion.img
+                src={c.image}
+                alt={`Slide ${i + 1}`}
+                className="h-full w-full object-cover"
+                initial={false}
+                animate={{ scale: i === slide ? 1.12 : 1 }}
+                transition={{ duration: i === slide ? 7 : 1, ease: "easeOut" }}
+              />
               <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent" />
               {/* fade bawah agar menyatu dengan latar gelap & kartu di bawahnya */}
               <div className="absolute inset-x-0 bottom-0 h-52 bg-gradient-to-t from-[#19191B] via-[#19191B]/70 to-transparent" />

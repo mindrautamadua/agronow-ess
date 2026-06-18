@@ -51,6 +51,26 @@ export async function getMember(id?: number): Promise<MemberRow | null> {
   );
 }
 
+/** Level/jenjang BOD (mis. "BOD-1") dari `_member_level_karyawan`, atau null. */
+export async function getMemberLevel(id?: number): Promise<string | null> {
+  const memberId = id ?? (await currentMemberId());
+  const row = await queryOne<{ nama: string | null }>(
+    `SELECT lk.nama FROM _member m
+       LEFT JOIN _member_level_karyawan lk ON lk.id = m.id_level_karyawan
+      WHERE m.member_id = ?`,
+    [memberId],
+  );
+  return row?.nama?.trim() || null;
+}
+
+/** Level yang boleh membuat Paket Coaching (pembimbing): BOD-1 & BOD-2. */
+export const COACH_LEVELS = ["BOD-1", "BOD-2"] as const;
+
+/** True bila level boleh membuat/menjadi pembimbing paket coaching. */
+export function canCreateCoaching(level: string | null | undefined): boolean {
+  return !!level && (COACH_LEVELS as readonly string[]).includes(level.trim());
+}
+
 /**
  * Cari member berdasarkan NIK SAP yang dikembalikan API holding. NIK tersebut
  * bisa tersimpan di `member_nip` atau `nip_sap`, jadi dicocokkan ke keduanya.

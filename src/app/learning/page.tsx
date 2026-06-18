@@ -5,7 +5,11 @@ import { useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import BottomGradient from "@/components/BottomGradient";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
-import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck, X, ExternalLink, ArrowUpRight, FileText, PlayCircle, ChevronRight, Download } from "lucide-react";
+import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck, X, ExternalLink, ArrowUpRight, FileText, PlayCircle, ChevronRight, Download, Plus, Search, Loader2, UserPlus } from "lucide-react";
+
+// Level pembimbing yang boleh membuat Paket Coaching (selaras src/lib/member.ts).
+const COACH_LEVELS = ["BOD-1", "BOD-2"];
+const canCreateCoaching = (level: string | null | undefined) => !!level && COACH_LEVELS.includes(level.trim());
 
 /** Logo LinkedIn (lucide tidak menyediakan ikon brand ini). */
 function LinkedinMark({ className }: { className?: string }) {
@@ -26,7 +30,7 @@ interface LClass {
 interface Data {
   summary: { total: { earned: number; target: number; pct: number }; buckets: Bucket[]; totalClasses: number; certificates: number };
   classes: LClass[];
-  member?: { name: string | null; email: string | null };
+  member?: { name: string | null; email: string | null; level?: string | null };
 }
 interface ClassMateri { type: string; title: string; url: string | null; isVideo: boolean }
 interface ClassModule { name: string; start: string | null; end: string | null; materi: ClassMateri[] }
@@ -79,6 +83,9 @@ function LearningInner() {
   const [filter, setFilter] = useState(() => paramFilter(params));
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState(false);
+
+  // Modal "Buat Paket Coaching" (khusus pembimbing BOD-1/BOD-2 pada view ?metode=mb_c).
+  const [coachingOpen, setCoachingOpen] = useState(false);
 
   // Detail kelas (modul + sertifikat) — di-fetch saat sebuah row diklik.
   const [openCrm, setOpenCrm] = useState<number | null>(null);
@@ -256,6 +263,30 @@ function LearningInner() {
               </section>
             )}
 
+            {/* Buat Paket Coaching — hanya pada view metode Coaching (mb_c) & untuk pembimbing BOD-1/BOD-2 */}
+            {filter === "mb_c" && canCreateCoaching(data.member?.level) && (
+              <section className="mt-5">
+                <div className="flex flex-col gap-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 to-white/[0.02] p-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600"><UserPlus className="h-5 w-5" /></div>
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-semibold">Kelola Jadwal Coaching</p>
+                      <p className="mt-0.5 text-[13px] text-white/60">
+                        Sebagai pembimbing ({data.member?.level}), susun jadwal pertemuan coaching (4–6 sesi).
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCoachingOpen(true)}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-600"
+                  >
+                    <Plus className="h-4 w-4" /> Buat Paket Coaching
+                  </button>
+                </div>
+              </section>
+            )}
+
             {/* Daftar kelas */}
             <section className="mt-5 space-y-3">
               {classes.length === 0 && <p className="rounded-xl border border-white/10 bg-white/[0.03] p-6 text-center text-white/50">{filter === "mb_sl" ? "Belum ada aktivitas belajar mandiri tercatat. Mulai dari katalog di atas." : "Belum ada aktivitas pada kategori ini."}</p>}
@@ -300,9 +331,213 @@ function LearningInner() {
           onClose={() => setOpenCrm(null)}
         />
       )}
+
+      {coachingOpen && <CoachingPackageModal onClose={() => setCoachingOpen(false)} />}
     </div>
   );
 }
+
+interface SesiRow { tanggal: string; jam: string }
+interface Bawahan { id: number; nama: string; nip: string | null; jabatan: string | null; unit: string | null }
+type CoachingMode = "development_dialogue" | "publik";
+
+const MIN_SESI = 4;
+const MAX_SESI = 6;
+
+const COACHING_MODES: { key: CoachingMode; label: string; desc: string }[] = [
+  { key: "development_dialogue", label: "Development Dialogue", desc: "Konteks atasan–bawahan. Pilih bawahan sebagai coachee." },
+  { key: "publik", label: "Publik", desc: "Terbuka, tanpa memilih coachee." },
+];
+
+const COACHING_RULES = [
+  "Tentukan jumlah pertemuan bimbingan yang dibutuhkan",
+  "Coach dapat membuat jadwal pertemuan kegiatan sesuai dengan ketersediaan waktu masing-masing",
+  "Setiap jadwal pertemuan berisikan MINIMAL 4 sesi dan MAKSIMAL 6 sesi pertemuan",
+  "Durasi 4 sesi (2 bulan) hingga 6 sesi (3 bulan)",
+  "Untuk membuat 1 jadwal pertemuan, isikan terlebih dahulu sesi-sesi yang diajukan kemudian klik Submit",
+  "Jadwal pertemuan yang diajukan akan muncul pada halaman profil",
+  "Ulangi langkah yang sama untuk membuat jadwal pertemuan lainnya",
+];
+
+/**
+ * Modal "Kelola Jadwal Coaching" — pembimbing (BOD-1/BOD-2) menyusun 1 paket
+ * berisi 4–6 sesi (tanggal + jam mulai). Paket mendapat kode otomatis & sesi
+ * diurutkan otomatis oleh server.
+ */
+function CoachingPackageModal({ onClose }: { onClose: () => void }) {
+  const [mode, setMode] = useState<CoachingMode>("development_dialogue");
+  const [bawahan, setBawahan] = useState<Bawahan[]>([]);
+  const [bawahanLoading, setBawahanLoading] = useState(false);
+  const [idPeserta, setIdPeserta] = useState<string>("");
+  const [sessions, setSessions] = useState<SesiRow[]>(() =>
+    Array.from({ length: MIN_SESI }, () => ({ tanggal: "", jam: "" })),
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<{ kode: string; sessions: number } | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+
+  // Muat daftar bawahan sekali saat mode Development Dialogue pertama dipakai.
+  useEffect(() => {
+    if (mode !== "development_dialogue" || bawahan.length > 0 || bawahanLoading) return;
+    setBawahanLoading(true);
+    fetch("/api/coaching/bawahan")
+      .then((r) => (r.ok ? r.json() : { bawahan: [] }))
+      .then((d) => setBawahan(d.bawahan ?? []))
+      .catch(() => setBawahan([]))
+      .finally(() => setBawahanLoading(false));
+  }, [mode, bawahan.length, bawahanLoading]);
+
+  const setRow = (i: number, key: keyof SesiRow, val: string) =>
+    setSessions((rows) => rows.map((r, idx) => (idx === i ? { ...r, [key]: val } : r)));
+  const addRow = () => setSessions((rows) => (rows.length >= MAX_SESI ? rows : [...rows, { tanggal: "", jam: "" }]));
+  const removeRow = (i: number) => setSessions((rows) => (rows.length <= MIN_SESI ? rows : rows.filter((_, idx) => idx !== i)));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (mode === "development_dialogue" && !idPeserta) { setError("Pilih bawahan (coachee) terlebih dahulu."); return; }
+    const filled = sessions.filter((s) => s.tanggal && s.jam);
+    if (filled.length !== sessions.length) { setError("Lengkapi tanggal & jam mulai untuk semua sesi."); return; }
+    if (sessions.length < MIN_SESI || sessions.length > MAX_SESI) { setError(`Jumlah sesi harus ${MIN_SESI}–${MAX_SESI}.`); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/coaching/paket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode, idPeserta: mode === "development_dialogue" ? Number(idPeserta) : null, sessions }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(d.error ?? "Gagal menyimpan."); setSaving(false); return; }
+      setDone({ kode: d.kode ?? "-", sessions: d.sessions ?? sessions.length });
+    } catch { setError("Gagal terhubung ke server."); setSaving(false); }
+  }
+
+  const inputCls = "w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-[14px] text-white outline-none placeholder:text-white/30 focus:border-emerald-500/50 [color-scheme:dark]";
+
+  return (
+    <div role="dialog" aria-modal="true" onClick={onClose}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/85 p-3 backdrop-blur-sm sm:p-6">
+      <div onClick={(e) => e.stopPropagation()} className="my-auto w-full max-w-2xl rounded-2xl border border-white/10 bg-[#1d1f1c] shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600"><UserPlus className="h-5 w-5" /></div>
+            <p className="text-[16px] font-bold text-white">Kelola Jadwal Coaching</p>
+          </div>
+          <button onClick={onClose} aria-label="Tutup" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {done ? (
+          <div className="p-6 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15"><CheckCircle2 className="h-6 w-6 text-emerald-400" /></div>
+            <p className="mt-3 text-[15px] font-semibold text-white">Jadwal coaching diajukan</p>
+            <p className="mt-1 text-[13px] text-white/55">
+              Paket <span className="font-semibold text-emerald-300">{done.kode}</span> berisi {done.sessions} sesi menunggu persetujuan.
+            </p>
+            <button onClick={onClose} className="mt-5 inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-600">
+              Selesai
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="space-y-4 p-4">
+            {/* Informasi */}
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-[13px] font-semibold text-white/80">Informasi</p>
+              <ul className="mt-2 space-y-1.5">
+                {COACHING_RULES.map((r, i) => (
+                  <li key={i} className="flex gap-2 text-[12.5px] leading-snug text-white/55">
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-emerald-400" />
+                    <span>{r}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Mode coaching */}
+            <div>
+              <p className="mb-1.5 text-[12.5px] font-medium text-white/70">Mode Coaching *</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {COACHING_MODES.map((m) => (
+                  <button key={m.key} type="button" onClick={() => setMode(m.key)}
+                    className={`rounded-xl border p-3 text-left transition-colors ${mode === m.key ? "border-emerald-500/50 bg-emerald-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]"}`}>
+                    <span className={`block text-[13.5px] font-semibold ${mode === m.key ? "text-emerald-300" : "text-white"}`}>{m.label}</span>
+                    <span className="mt-0.5 block text-[11.5px] leading-snug text-white/50">{m.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Bawahan (coachee) — hanya untuk Development Dialogue */}
+            {mode === "development_dialogue" && (
+              <div>
+                <label className="mb-1.5 block text-[12.5px] font-medium text-white/70">Bawahan (Coachee) *</label>
+                <select value={idPeserta} onChange={(e) => setIdPeserta(e.target.value)} disabled={bawahanLoading || bawahan.length === 0} className={inputCls}>
+                  <option value="">{bawahanLoading ? "Memuat bawahan…" : bawahan.length === 0 ? "Tidak ada bawahan terdaftar" : "— Pilih bawahan —"}</option>
+                  {bawahan.map((bw) => (
+                    <option key={bw.id} value={bw.id}>{bw.nama}{bw.jabatan ? ` — ${bw.jabatan}` : ""}</option>
+                  ))}
+                </select>
+                {!bawahanLoading && bawahan.length === 0 && (
+                  <p className="mt-1 text-[11.5px] text-amber-300/80">Belum ada bawahan yang terhubung ke akun Anda. Gunakan mode Publik atau hubungi admin.</p>
+                )}
+              </div>
+            )}
+
+            {error && <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-[13px] text-red-300">{error}</p>}
+
+            {/* Sesi-sesi */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <p className="text-[12.5px] font-medium text-white/70">Sesi Pertemuan ({sessions.length}/{MAX_SESI})</p>
+                <button type="button" onClick={addRow} disabled={sessions.length >= MAX_SESI}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[12px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:opacity-40">
+                  <Plus className="h-3.5 w-3.5" /> Tambah Sesi
+                </button>
+              </div>
+
+              {sessions.map((s, i) => (
+                <div key={i} className="flex items-end gap-2.5 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                  <span className="mb-2.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-[12px] font-bold text-emerald-300">{i + 1}</span>
+                  <div className="flex-1">
+                    <label className="mb-1 block text-[11.5px] font-medium text-white/55">Tanggal Pelatihan *</label>
+                    <input type="date" required value={s.tanggal} onChange={(e) => setRow(i, "tanggal", e.target.value)} className={inputCls} />
+                  </div>
+                  <div className="flex-1">
+                    <label className="mb-1 block text-[11.5px] font-medium text-white/55">Jam Mulai *</label>
+                    <input type="time" required value={s.jam} onChange={(e) => setRow(i, "jam", e.target.value)} className={inputCls} />
+                  </div>
+                  <button type="button" onClick={() => removeRow(i)} disabled={sessions.length <= MIN_SESI}
+                    title={sessions.length <= MIN_SESI ? `Minimal ${MIN_SESI} sesi` : "Hapus sesi"}
+                    className="mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-red-500/15 hover:text-red-300 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-white/50">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              <p className="text-[11.5px] text-white/40">Minimal {MIN_SESI} sesi, maksimal {MAX_SESI} sesi. Sesi akan diurutkan otomatis berdasarkan tanggal & jam.</p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={onClose} className="rounded-full px-5 py-2.5 text-[13px] font-medium text-white/70 transition-colors hover:bg-white/10">Batal</button>
+              <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-600 disabled:opacity-50">
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />} Submit
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 /** Modal detail kelas — daftar modul + materi, dan sertifikat. */
 function ClassDetailModal({ loading, err, detail, onClose }: { loading: boolean; err: boolean; detail: ClassDetail | null; onClose: () => void }) {

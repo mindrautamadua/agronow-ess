@@ -1,4 +1,4 @@
-import { getMember } from "@/lib/member";
+import { getMember, getMemberLevel } from "@/lib/member";
 import { getLearningSummary, getMemberClasses } from "@/lib/learning";
 
 export const runtime = "nodejs";
@@ -10,8 +10,8 @@ export async function GET() {
     const member = await getMember();
     if (!member) return Response.json({ error: "Member tidak ditemukan" }, { status: 404 });
     const id = member.member_id;
-    const [summary, classes] = await Promise.all([getLearningSummary(id), getMemberClasses(id)]);
-    return Response.json({ summary, classes, member: { name: member.member_name, email: member.member_email } });
+    const [summary, classes, level] = await Promise.all([getLearningSummary(id), getMemberClasses(id), getMemberLevel(id)]);
+    return Response.json({ summary, classes, member: { name: member.member_name, email: member.member_email, level } });
   } catch (e) {
     console.error("/api/learning", e);
     return Response.json({ error: "Gagal memuat data" }, { status: 500 });

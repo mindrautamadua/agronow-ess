@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
-import { enablePush, pushPermission } from "@/components/PushSetup";
+import { enablePush, pushPermission, PUSH_MESSAGE } from "@/components/PushSetup";
 import { ArrowLeft, Search, Send, X, BellRing, MessageSquarePlus } from "lucide-react";
 
 interface Conversation { kode: string; friendId: number; friendName: string; friendImg: string | null; lastText: string; lastTgl: string | null; lastFromMe: boolean; unread: number }
@@ -39,6 +39,7 @@ function ChatInner() {
   const [searchQ, setSearchQ] = useState("");
   const [results, setResults] = useState<MemberLite[]>([]);
   const [pushPerm, setPushPerm] = useState<string>("default");
+  const [pushMsg, setPushMsg] = useState<string>("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setPushPerm(pushPermission()); }, []);
@@ -145,10 +146,14 @@ function ChatInner() {
             </div>
 
             {pushPerm !== "granted" && (
-              <button onClick={async () => { await enablePush(); setPushPerm(pushPermission()); }}
-                className="flex items-center gap-2 border-b border-white/10 bg-emerald-500/10 px-3 py-2.5 text-left text-[12.5px] text-emerald-200 hover:bg-emerald-500/15">
-                <BellRing className="h-4 w-4 shrink-0" /> Aktifkan notifikasi pesan
+              <button onClick={async () => { setPushMsg("Memproses…"); const res = await enablePush(); setPushMsg(PUSH_MESSAGE[res]); setPushPerm(pushPermission()); }}
+                className="flex w-full items-start gap-2 border-b border-white/10 bg-emerald-500/10 px-3 py-2.5 text-left text-[12.5px] text-emerald-200 hover:bg-emerald-500/15">
+                <BellRing className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{pushMsg || "Aktifkan notifikasi pesan"}</span>
               </button>
+            )}
+            {pushPerm === "granted" && pushMsg && (
+              <p className="border-b border-white/10 bg-emerald-500/10 px-3 py-2 text-[12px] text-emerald-200">{pushMsg}</p>
             )}
 
             <div className="flex-1 overflow-y-auto">

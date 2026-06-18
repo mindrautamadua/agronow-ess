@@ -6,8 +6,12 @@
  *   1. Validasi NIK + password ke `/access/login` (respons array; `ADA="1"` = valid).
  *   2. Petakan `NIK_SAP` → `member_id` di DB `_member` (sumber data app).
  *   3. Set cookie sesi httpOnly bertanda tangan.
+ *
+ * Fallback DB: bila API tidak memvalidasi, password dicek ke `_member` (MD5).
+ * Karena satu NIK bisa ada di banyak perusahaan, jika password cocok ke >1
+ * baris, route balas `needGroup` + daftar perusahaan agar user memilih entitas.
  */
-import { getMemberByNikSap, verifyMemberPassword, type MemberRow } from "@/lib/member";
+import { getMemberByNikSap, findMembersByPassword, type MemberRow } from "@/lib/member";
 import { setSessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -28,10 +32,12 @@ interface HoldingUser {
 export async function POST(req: Request) {
   let nik = "";
   let password = "";
+  let groupId = ""; // dipilih user saat NIK ambigu (login non-API)
   try {
     const body = await req.json();
     nik = String(body?.nik ?? "").trim();
     password = String(body?.password ?? "");
+    groupId = String(body?.groupId ?? "").trim();
   } catch {
     return Response.json({ error: "Permintaan tidak valid" }, { status: 400 });
   }
@@ -82,18 +88,47 @@ export async function POST(req: Request) {
   }
 
   // ── 2b. Fallback: API tidak menemukan / tidak tersedia → cek DB `_member` ──
-  const dbMember = await verifyMemberPassword(nik, password);
-  if (dbMember) {
-    return issueSession(dbMember, {
-      niksap: dbMember.nip_sap || dbMember.member_nip || nik,
-      nama: dbMember.member_name ?? "",
-      role: "",
-      ptpn: "",
-      token: "",
-    });
+  const matches = await findMembersByPassword(nik, password);
+
+  if (matches.length === 0) {
+    return Response.json({ error: "NIK atau password salah" }, { status: 401 });
   }
 
-  return Response.json({ error: "NIK atau password salah" }, { status: 401 });
+  // Persempit dengan entitas pilihan user (jika ada).
+  const candidates = groupId
+    ? matches.filter((m) => m.groupId === groupId)
+    : matches;
+
+  if (candidates.length === 0) {
+    // groupId dikirim tapi tak cocok — minta pilih ulang.
+    return needGroupResponse(matches);
+  }
+
+  if (candidates.length > 1) {
+    // NIK + password sama di >1 perusahaan → user harus memilih entitas.
+    return needGroupResponse(candidates);
+  }
+
+  const { member } = candidates[0];
+  return issueSession(member, {
+    niksap: member.nip_sap || member.member_nip || nik,
+    nama: member.member_name ?? "",
+    role: "",
+    ptpn: "",
+    token: "",
+  });
+}
+
+/** Balasan saat NIK ambigu — daftar perusahaan untuk dipilih di form login. */
+function needGroupResponse(matches: { groupId: string | null; groupName: string | null }[]): Response {
+  // Dedup per groupId, urut nama perusahaan.
+  const seen = new Map<string, { groupId: string; groupName: string }>();
+  for (const m of matches) {
+    const id = m.groupId ?? "";
+    if (!seen.has(id)) seen.set(id, { groupId: id, groupName: m.groupName ?? "(Tanpa nama)" });
+  }
+  const options = [...seen.values()].sort((a, b) => a.groupName.localeCompare(b.groupName));
+  return Response.json({ needGroup: true, options }, { status: 409 });
 }
 
 async function issueSession(

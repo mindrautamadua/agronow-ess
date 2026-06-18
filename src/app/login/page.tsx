@@ -10,6 +10,8 @@ import {
   EyeOff,
   ArrowRight,
   Loader2,
+  Building2,
+  ChevronDown,
   Briefcase,
   Users,
   GraduationCap,
@@ -40,6 +42,10 @@ export default function LoginPage() {
   const [nip, setNip] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  // Disambiguasi entitas — hanya muncul saat backend balas `needGroup`
+  // (NIK + password sama terdaftar di >1 perusahaan, jalur login non-API).
+  const [groups, setGroups] = useState<{ groupId: string; groupName: string }[]>([]);
+  const [groupId, setGroupId] = useState("");
 
   async function onLogin() {
     if (loading) return;
@@ -48,14 +54,26 @@ export default function LoginPage() {
       setError("NIK dan password wajib diisi.");
       return;
     }
+    if (groups.length > 0 && !groupId) {
+      setError("Pilih perusahaan/entitas kamu.");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nik: nip.trim(), password }),
+        body: JSON.stringify({ nik: nip.trim(), password, groupId: groupId || undefined }),
       });
       const data = await res.json().catch(() => ({}));
+
+      // NIK ambigu — minta user memilih entitas, lalu submit ulang.
+      if (res.status === 409 && data?.needGroup) {
+        setGroups(data.options ?? []);
+        setError("NIK ini terdaftar di lebih dari satu perusahaan. Pilih entitas kamu.");
+        setLoading(false);
+        return;
+      }
       if (!res.ok) {
         setError(data?.error ?? "Gagal masuk. Coba lagi.");
         setLoading(false);
@@ -255,7 +273,7 @@ export default function LoginPage() {
                       <input
                         type="text"
                         value={nip}
-                        onChange={(e) => setNip(e.target.value)}
+                        onChange={(e) => { setNip(e.target.value); setGroups([]); setGroupId(""); }}
                         placeholder="ketik NIK"
                         autoComplete="username"
                         className="w-full rounded-xl border border-white/12 bg-white/[0.04] py-3 pl-10 pr-3 text-sm text-white outline-none transition-all placeholder:text-emerald-50/35 focus:border-emerald-400/50 focus:bg-white/[0.08] focus:ring-2 focus:ring-emerald-400/20"
@@ -273,7 +291,7 @@ export default function LoginPage() {
                       <input
                         type={showPw ? "text" : "password"}
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={(e) => { setPassword(e.target.value); setGroups([]); setGroupId(""); }}
                         placeholder="ketik password"
                         autoComplete="current-password"
                         className="w-full rounded-xl border border-white/12 bg-white/[0.04] py-3 pl-10 pr-10 text-sm text-white outline-none transition-all placeholder:text-emerald-50/35 focus:border-emerald-400/50 focus:bg-white/[0.08] focus:ring-2 focus:ring-emerald-400/20"
@@ -289,6 +307,31 @@ export default function LoginPage() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Entitas — muncul hanya saat NIK terdaftar di >1 perusahaan */}
+                  {groups.length > 0 && (
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium text-emerald-50/70">
+                        Perusahaan / Entitas
+                      </label>
+                      <div className="group relative">
+                        <Building2 className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-200/60 transition-colors group-focus-within:text-emerald-300" />
+                        <select
+                          value={groupId}
+                          onChange={(e) => setGroupId(e.target.value)}
+                          className="w-full appearance-none rounded-xl border border-white/12 bg-white/[0.04] py-3 pl-10 pr-10 text-sm text-white outline-none transition-all focus:border-emerald-400/50 focus:bg-white/[0.08] focus:ring-2 focus:ring-emerald-400/20 [&>option]:text-black"
+                        >
+                          <option value="">Pilih perusahaan</option>
+                          {groups.map((g) => (
+                            <option key={g.groupId} value={g.groupId}>
+                              {g.groupName}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-200/60" />
+                      </div>
+                    </div>
+                  )}
 
                   {error && (
                     <p

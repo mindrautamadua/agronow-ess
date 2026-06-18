@@ -5,7 +5,7 @@
  * sebagai fallback dev.
  */
 import crypto from "node:crypto";
-import { queryOne } from "./db";
+import { query, queryOne } from "./db";
 import { getSession } from "./session";
 
 export async function currentMemberId(): Promise<number> {
@@ -65,31 +65,54 @@ export async function getMemberByNikSap(niksap: string): Promise<MemberRow | nul
   );
 }
 
+/** Hasil match autentikasi DB beserta info perusahaan untuk disambiguasi. */
+export interface MemberAuthMatch {
+  member: MemberRow;
+  groupId: string | null;
+  groupName: string | null;
+}
+
+function md5Matches(stored: string | null, password: string): boolean {
+  if (!stored) return false;
+  const expected = stored.trim().toLowerCase();
+  const actual = crypto.createHash("md5").update(password).digest("hex");
+  if (expected.length !== actual.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
+}
+
 /**
  * Fallback autentikasi langsung ke DB ketika API holding tidak memvalidasi user
  * (tidak ditemukan / API bermasalah). Password `_member.member_password`
- * disimpan sebagai MD5 (warisan AGHRIS). Membandingkan secara waktu-konstan,
- * hanya member `active`. Mengembalikan baris member bila cocok, jika tidak null.
+ * disimpan sebagai MD5 (warisan AGHRIS), dibandingkan waktu-konstan, hanya
+ * member `active`.
+ *
+ * NIK bisa muncul di banyak perusahaan (160 NIK lintas-`group_id`). Karena itu
+ * fungsi ini mengembalikan SEMUA baris yang password-nya cocok — pemanggil yang
+ * menentukan: 0 = gagal, 1 = login, >1 = minta user pilih entitas/perusahaan.
  */
-export async function verifyMemberPassword(
+export async function findMembersByPassword(
   niksap: string,
   password: string,
-): Promise<MemberRow | null> {
-  const row = await queryOne<MemberRow & { member_password: string | null }>(
-    `SELECT ${MEMBER_COLUMNS}, member_password FROM _member
-       WHERE (member_nip = ? OR nip_sap = ?) AND member_status = 'active'
-       ORDER BY member_id LIMIT 1`,
+): Promise<MemberAuthMatch[]> {
+  type Row = MemberRow & {
+    member_password: string | null;
+    group_id: string | null;
+    group_name: string | null;
+  };
+  const rows = await query<Row>(
+    `SELECT ${MEMBER_COLUMNS}, m.member_password,
+            m.group_id::text AS group_id, g.group_name
+       FROM _member m
+       LEFT JOIN _group g ON g.group_id = m.group_id
+       WHERE (m.member_nip = ? OR m.nip_sap = ?) AND m.member_status = 'active'
+       ORDER BY m.member_id`,
     [niksap, niksap],
   );
-  if (!row || !row.member_password) return null;
 
-  const expected = row.member_password.trim().toLowerCase();
-  const actual = crypto.createHash("md5").update(password).digest("hex");
-  if (expected.length !== actual.length) return null;
-  if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(actual))) return null;
-
-  // Jangan ikut-bocorkan hash ke pemanggil.
-  const { member_password: _omit, ...member } = row;
-  void _omit;
-  return member;
+  return rows
+    .filter((r) => md5Matches(r.member_password, password))
+    .map(({ member_password: _omit, group_id, group_name, ...member }) => {
+      void _omit;
+      return { member: member as MemberRow, groupId: group_id, groupName: group_name };
+    });
 }

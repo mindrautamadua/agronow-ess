@@ -182,19 +182,31 @@ export default function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [openDrop, setOpenDrop] = useState<string | null>(null);
   const [me, setMe] = useState<Me | null>(null);
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setSlide((s) => (s + 1) % CAROUSEL.length), 6000);
     return () => clearInterval(t);
   }, []);
 
+  // Header tetap tampil saat scroll: transparan di atas hero, solid setelah di-scroll.
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   useEffect(() => {
     fetch("/api/me").then((r) => r.json()).then((d) => { if (d.member) setMe(d); }).catch(() => {});
   }, []);
 
-  function go(href: string) {
-    if (href === "/login") router.push("/login");
-    else if (href.startsWith("/")) router.push(href);
+  async function go(href: string) {
+    if (href === "/login") {
+      // Logout: hapus sesi dulu agar proxy tidak memantulkan /login → /home.
+      try { await fetch("/api/auth/logout", { method: "POST" }); } catch { /* abaikan */ }
+      router.push("/login");
+    } else if (href.startsWith("/")) router.push(href);
   }
 
   const name = me?.member.name ?? "…";
@@ -202,9 +214,9 @@ export default function HomePage() {
   const buckets = me?.learning.buckets ?? [];
 
   return (
-    <div className="min-h-screen bg-[#19191B] text-white">
-      {/* ───── Header ───── */}
-      <header className="sticky top-0 z-30 bg-[#19191B]/95 backdrop-blur">
+    <div className="relative min-h-screen bg-[#19191B] text-white">
+      {/* ───── Header (fixed: transparan di atas hero, solid saat scroll) ───── */}
+      <header className={`fixed inset-x-0 top-0 z-30 transition-colors duration-300 ${scrolled ? "border-b border-white/10 bg-[#19191B]/95 shadow-lg backdrop-blur" : ""}`}>
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 py-5">
           <a href="/home" className="shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -318,6 +330,8 @@ export default function HomePage() {
               </div>
             </div>
           ))}
+          {/* scrim atas agar header/nav terbaca di atas area gambar terang */}
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-[5] h-28 bg-gradient-to-b from-black/55 to-transparent" />
           <div className="absolute bottom-56 left-1/2 z-20 flex -translate-x-1/2 gap-2 sm:bottom-60">
             {CAROUSEL.map((_, i) => (
               <button key={i} onClick={() => setSlide(i)} className={`h-2 rounded-full transition-all ${i === slide ? "w-6 bg-white" : "w-2 bg-white/50"}`} aria-label={`Slide ${i + 1}`} />

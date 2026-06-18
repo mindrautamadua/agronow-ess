@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** Daftar IDP (Individual Development Program) milik member. */
 export async function GET() {
   try {
-    const id = currentMemberId();
+    const id = await currentMemberId();
     const rows = await query<{
       id: number; tahun: number | null; area_pengembangan: string | null;
       aspirasi_pengembangan: string | null; rencana: string | null; deskripsi_pengembangan: string | null;

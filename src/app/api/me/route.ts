@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 /** Ringkasan untuk halaman utama: identitas + poin + saldo + progres 70-20-10. */
 export async function GET() {
   try {
-    const id = currentMemberId();
+    const id = await currentMemberId();
     const [member, summary] = await Promise.all([getMember(id), getLearningSummary(id)]);
     if (!member) return Response.json({ error: "Member tidak ditemukan" }, { status: 404 });
 

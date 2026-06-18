@@ -27,7 +27,7 @@ function mapCourse(r: KatalogRow) {
 /** Wishlist member + katalog pelatihan untuk dipilih. */
 export async function GET() {
   try {
-    const id = currentMemberId();
+    const id = await currentMemberId();
 
     const items = await query<KatalogRow & { wid: number; tahun: number | null; prioritas: number | null; status: string | null }>(
       `SELECT w.id AS wid, w.tahun, w.prioritas, w.status,

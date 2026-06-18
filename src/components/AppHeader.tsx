@@ -31,7 +31,14 @@ export default function AppHeader({ active }: { active?: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [openDrop, setOpenDrop] = useState<string | null>(null);
 
-  const go = (href: string) => { if (href.startsWith("/")) router.push(href); };
+  const go = async (href: string) => {
+    if (!href.startsWith("/")) return;
+    // Logout: hapus sesi dulu (kalau tidak, proxy memantulkan /login → /home).
+    if (href === "/login") {
+      try { await fetch("/api/auth/logout", { method: "POST" }); } catch { /* abaikan */ }
+    }
+    router.push(href);
+  };
 
   return (
     <header className="sticky top-0 z-30 bg-[#19191B]/95 backdrop-blur">

@@ -4,26 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  Building2,
   User as UserIcon,
   Lock,
   Eye,
   EyeOff,
   ArrowRight,
   Loader2,
-  ChevronDown,
   Briefcase,
   Users,
   GraduationCap,
 } from "lucide-react";
-
-const ENTITAS = [
-  "PTPN I",
-  "PTPN III (Persero)",
-  "PTPN IV",
-  "PalmCo",
-  "SupportingCo",
-];
 
 // Partikel "spora cahaya" yang naik — koordinat tetap agar stabil saat SSR.
 const MOTES = [
@@ -47,15 +37,35 @@ export default function LoginPage() {
   const router = useRouter();
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [groupId, setGroupId] = useState("");
   const [nip, setNip] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
-  function onLogin() {
+  async function onLogin() {
     if (loading) return;
+    setError("");
+    if (!nip.trim() || !password) {
+      setError("NIK dan password wajib diisi.");
+      return;
+    }
     setLoading(true);
-    // BYPASS: validasi akun di-skip dulu — langsung ke halaman utama.
-    setTimeout(() => router.push("/home"), 700);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nik: nip.trim(), password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data?.error ?? "Gagal masuk. Coba lagi.");
+        setLoading(false);
+        return;
+      }
+      router.replace("/home");
+    } catch {
+      setError("Tidak dapat terhubung ke server. Periksa koneksi kamu.");
+      setLoading(false);
+    }
   }
 
   return (
@@ -235,29 +245,6 @@ export default function LoginPage() {
                     onLogin();
                   }}
                 >
-                  {/* Entitas */}
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-medium text-emerald-50/70">
-                      Entitas
-                    </label>
-                    <div className="group relative">
-                      <Building2 className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-200/60 transition-colors group-focus-within:text-emerald-300" />
-                      <select
-                        value={groupId}
-                        onChange={(e) => setGroupId(e.target.value)}
-                        className="w-full appearance-none rounded-xl border border-white/12 bg-white/[0.04] py-3 pl-10 pr-10 text-sm text-white outline-none transition-all focus:border-emerald-400/50 focus:bg-white/[0.08] focus:ring-2 focus:ring-emerald-400/20 [&>option]:text-black"
-                      >
-                        <option value="">Pilih Entitas</option>
-                        {ENTITAS.map((e) => (
-                          <option key={e} value={e}>
-                            {e}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-200/60" />
-                    </div>
-                  </div>
-
                   {/* NIK */}
                   <div>
                     <label className="mb-1.5 block text-[11px] font-medium text-emerald-50/70">
@@ -302,6 +289,15 @@ export default function LoginPage() {
                       </button>
                     </div>
                   </div>
+
+                  {error && (
+                    <p
+                      role="alert"
+                      className="rounded-xl border border-red-400/30 bg-red-500/15 px-3.5 py-2.5 text-[12.5px] font-medium text-red-100"
+                    >
+                      {error}
+                    </p>
+                  )}
 
                   <button
                     type="submit"

@@ -41,7 +41,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 
 // ── Handler tool — memanggil data layer yang sudah ada ───────────────────────
 async function runTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-  const memberId = currentMemberId();
+  const memberId = await currentMemberId();
   switch (name) {
     case "get_profil": {
       const m = await getMember(memberId);

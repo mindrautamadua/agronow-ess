@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 /** Aktivitas pembelajaran member + ringkasan 70-20-10. */
 export async function GET() {
   try {
-    const id = currentMemberId();
+    const id = await currentMemberId();
     const [summary, classes] = await Promise.all([getLearningSummary(id), getMemberClasses(id)]);
     return Response.json({ summary, classes });
   } catch (e) {

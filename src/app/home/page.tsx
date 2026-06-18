@@ -179,7 +179,7 @@ function ZoomImg({ src, alt, href }: { src: string; alt: string; href?: string }
 // Baris swipe horizontal ala Netflix: scroll-snap + swipe natif (mobile),
 // tombol panah muncul saat hover (desktop), scrollbar disembunyikan.
 // `itemClass` mengatur lebar tiap kartu (mis. 3 atau 6 kartu per layar).
-function SwipeRow({ children, itemClass }: { children: React.ReactNode[]; itemClass: string }) {
+function SwipeRow({ children, itemClass, center = false }: { children: React.ReactNode[]; itemClass: string; center?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const scroll = (dir: 1 | -1) => {
     const el = ref.current;
@@ -189,25 +189,29 @@ function SwipeRow({ children, itemClass }: { children: React.ReactNode[]; itemCl
     <div className="group/row relative">
       <div
         ref={ref}
-        className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={`flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${center ? "sm:justify-center" : ""}`}
       >
         {children.map((child, i) => (
           <div key={i} className={`shrink-0 snap-start ${itemClass}`}>{child}</div>
         ))}
       </div>
-      {/* Panah navigasi — hanya desktop, muncul saat hover */}
-      <button
-        type="button" aria-label="Sebelumnya" onClick={() => scroll(-1)}
-        className="absolute -left-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/70 text-white opacity-0 backdrop-blur transition hover:bg-black/90 group-hover/row:opacity-100 lg:flex"
-      >
-        <ChevronLeft className="h-5 w-5" />
-      </button>
-      <button
-        type="button" aria-label="Berikutnya" onClick={() => scroll(1)}
-        className="absolute -right-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/70 text-white opacity-0 backdrop-blur transition hover:bg-black/90 group-hover/row:opacity-100 lg:flex"
-      >
-        <ChevronRight className="h-5 w-5" />
-      </button>
+      {/* Panah navigasi — hanya desktop, muncul saat hover (disembunyikan saat row di-tengah/tak perlu scroll) */}
+      {!center && (
+        <>
+          <button
+            type="button" aria-label="Sebelumnya" onClick={() => scroll(-1)}
+            className="absolute -left-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/70 text-white opacity-0 backdrop-blur transition hover:bg-black/90 group-hover/row:opacity-100 lg:flex"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            type="button" aria-label="Berikutnya" onClick={() => scroll(1)}
+            className="absolute -right-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/70 text-white opacity-0 backdrop-blur transition hover:bg-black/90 group-hover/row:opacity-100 lg:flex"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -541,7 +545,7 @@ export default function HomePage() {
             <div className="text-[28px] font-bold sm:text-4xl">{sec.title}</div>
             <div className="mt-2 max-w-4xl text-[16px] text-white/90 sm:text-xl">{sec.desc}</div>
             <div className="mt-6">
-              <SwipeRow itemClass="w-[78%] sm:w-[46%] lg:w-[31.5%]">
+              <SwipeRow center itemClass="w-[44%] sm:w-[30%] lg:w-[22%]">
                 {sec.items.map((it, i) => <ZoomImg key={i} src={it.src} alt={it.label} href={it.href} />)}
               </SwipeRow>
             </div>

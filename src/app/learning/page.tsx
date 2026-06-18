@@ -1,11 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import BottomGradient from "@/components/BottomGradient";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
-import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck, X, ExternalLink, ArrowUpRight, FileText, PlayCircle, ChevronRight, Download, Plus, Search, Loader2, UserPlus } from "lucide-react";
+import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck, X, ExternalLink, ArrowUpRight, FileText, PlayCircle, ChevronRight, Download, Plus, Search, Loader2, UserPlus, CalendarDays } from "lucide-react";
 
 // Level pembimbing yang boleh membuat Paket Coaching (selaras src/lib/member.ts).
 const COACH_LEVELS = ["BOD-1", "BOD-2"];
@@ -76,6 +76,22 @@ const fmtDate = (s: string | null) => {
   return isNaN(d.getTime()) ? null : d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
 };
 
+// Format "tanggal jam" sesi paket (timestamp dari DB, mis. "2026-07-01 09:00:00").
+const fmtDateTime = (s: string | null) => {
+  if (!s) return null;
+  const d = new Date(s.includes("T") ? s : s.replace(" ", "T"));
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+};
+
+interface PaketSesi { urutan: number; tanggal: string }
+interface Paket {
+  id: number; kode: string; tipe: "coach" | "mentor"; mode: string | null;
+  tahun: number; noPaket: number; jpl: number; statusApproval: string | null;
+  peserta: { id: number; nama: string | null } | null;
+  sessions: PaketSesi[];
+}
+
 function LearningInner() {
   const params = useSearchParams();
   // Filter bisa berupa bucket (formal/social/experiential) atau kode metode (mb_*) lewat ?metode=.
@@ -84,8 +100,11 @@ function LearningInner() {
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState(false);
 
-  // Modal "Buat Paket Coaching" (khusus pembimbing BOD-1/BOD-2 pada view ?metode=mb_c).
-  const [coachingOpen, setCoachingOpen] = useState(false);
+  // Modal "Kelola Jadwal" Coaching/Mentoring (khusus pembimbing BOD-1/BOD-2 pada
+  // view ?metode=mb_c / mb_m). Null = tertutup.
+  const [guidanceModal, setGuidanceModal] = useState<"coach" | "mentor" | null>(null);
+  // Dinaikkan setelah sebuah paket baru dibuat agar daftar paket dimuat ulang.
+  const [packagesReload, setPackagesReload] = useState(0);
 
   // Detail kelas (modul + sertifikat) — di-fetch saat sebuah row diklik.
   const [openCrm, setOpenCrm] = useState<number | null>(null);
@@ -263,28 +282,38 @@ function LearningInner() {
               </section>
             )}
 
-            {/* Buat Paket Coaching — hanya pada view metode Coaching (mb_c) & untuk pembimbing BOD-1/BOD-2 */}
-            {filter === "mb_c" && canCreateCoaching(data.member?.level) && (
-              <section className="mt-5">
-                <div className="flex flex-col gap-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 to-white/[0.02] p-5 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600"><UserPlus className="h-5 w-5" /></div>
-                    <div className="min-w-0">
-                      <p className="text-[15px] font-semibold">Kelola Jadwal Coaching</p>
-                      <p className="mt-0.5 text-[13px] text-white/60">
-                        Sebagai pembimbing ({data.member?.level}), susun jadwal pertemuan coaching (4–6 sesi).
-                      </p>
+            {/* Kelola Jadwal Coaching/Mentoring — pada view mb_c / mb_m & untuk pembimbing BOD-1/BOD-2 */}
+            {(filter === "mb_c" || filter === "mb_m") && canCreateCoaching(data.member?.level) && (() => {
+              const tipe: "coach" | "mentor" = filter === "mb_m" ? "mentor" : "coach";
+              const noun = tipe === "mentor" ? "mentoring" : "coaching";
+              const title = tipe === "mentor" ? "Kelola Jadwal Mentoring" : "Kelola Jadwal Coaching";
+              return (
+                <section className="mt-5">
+                  <div className="flex flex-col gap-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 to-white/[0.02] p-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600"><UserPlus className="h-5 w-5" /></div>
+                      <div className="min-w-0">
+                        <p className="text-[15px] font-semibold">{title}</p>
+                        <p className="mt-0.5 text-[13px] text-white/60">
+                          Sebagai pembimbing ({data.member?.level}), susun jadwal pertemuan {noun} (4–6 sesi).
+                        </p>
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setGuidanceModal(tipe)}
+                      className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-600"
+                    >
+                      <Plus className="h-4 w-4" /> Buat Paket {tipe === "mentor" ? "Mentoring" : "Coaching"}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setCoachingOpen(true)}
-                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-600"
-                  >
-                    <Plus className="h-4 w-4" /> Buat Paket Coaching
-                  </button>
-                </div>
-              </section>
+                </section>
+              );
+            })()}
+
+            {/* Paket Coaching/Mentoring yang dibuat oleh pembimbing yang login */}
+            {(filter === "mb_c" || filter === "mb_m") && canCreateCoaching(data.member?.level) && (
+              <GuidancePackages tipe={filter === "mb_m" ? "mentor" : "coach"} reload={packagesReload} />
             )}
 
             {/* Daftar kelas */}
@@ -332,26 +361,39 @@ function LearningInner() {
         />
       )}
 
-      {coachingOpen && <CoachingPackageModal onClose={() => setCoachingOpen(false)} />}
+      {guidanceModal && (
+        <CoachingPackageModal
+          tipe={guidanceModal}
+          onClose={() => setGuidanceModal(null)}
+          onCreated={() => setPackagesReload((n) => n + 1)}
+        />
+      )}
     </div>
   );
 }
 
 interface SesiRow { tanggal: string; jam: string }
-interface Bawahan { id: number; nama: string; nip: string | null; jabatan: string | null; unit: string | null }
+interface Bawahan { nikSap: string; nama: string; psa: string | null }
 type CoachingMode = "development_dialogue" | "publik";
+type GuidanceTipe = "coach" | "mentor";
 
 const MIN_SESI = 4;
 const MAX_SESI = 6;
 
-const COACHING_MODES: { key: CoachingMode; label: string; desc: string }[] = [
-  { key: "development_dialogue", label: "Development Dialogue", desc: "Konteks atasan–bawahan. Pilih bawahan sebagai coachee." },
-  { key: "publik", label: "Publik", desc: "Terbuka, tanpa memilih coachee." },
+// Konfigurasi label per jenis bimbingan (coaching/mentoring) — strukturnya sama.
+const GUIDANCE: Record<GuidanceTipe, { title: string; actor: string; coachee: string }> = {
+  coach: { title: "Kelola Jadwal Coaching", actor: "Coach", coachee: "coachee" },
+  mentor: { title: "Kelola Jadwal Mentoring", actor: "Mentor", coachee: "mentee" },
+};
+
+const guidanceModes = (coachee: string): { key: CoachingMode; label: string; desc: string }[] => [
+  { key: "development_dialogue", label: "Development Dialogue", desc: `Konteks atasan–bawahan. Pilih bawahan sebagai ${coachee}.` },
+  { key: "publik", label: "Publik", desc: `Terbuka, tanpa memilih ${coachee}.` },
 ];
 
-const COACHING_RULES = [
+const guidanceRules = (actor: string) => [
   "Tentukan jumlah pertemuan bimbingan yang dibutuhkan",
-  "Coach dapat membuat jadwal pertemuan kegiatan sesuai dengan ketersediaan waktu masing-masing",
+  `${actor} dapat membuat jadwal pertemuan kegiatan sesuai dengan ketersediaan waktu masing-masing`,
   "Setiap jadwal pertemuan berisikan MINIMAL 4 sesi dan MAKSIMAL 6 sesi pertemuan",
   "Durasi 4 sesi (2 bulan) hingga 6 sesi (3 bulan)",
   "Untuk membuat 1 jadwal pertemuan, isikan terlebih dahulu sesi-sesi yang diajukan kemudian klik Submit",
@@ -360,15 +402,18 @@ const COACHING_RULES = [
 ];
 
 /**
- * Modal "Kelola Jadwal Coaching" — pembimbing (BOD-1/BOD-2) menyusun 1 paket
- * berisi 4–6 sesi (tanggal + jam mulai). Paket mendapat kode otomatis & sesi
- * diurutkan otomatis oleh server.
+ * Modal "Kelola Jadwal Coaching/Mentoring" — pembimbing (BOD-1/BOD-2) menyusun 1
+ * paket berisi 4–6 sesi (tanggal + jam mulai). Paket mendapat kode otomatis &
+ * sesi diurutkan otomatis oleh server. `tipe` membedakan coaching vs mentoring.
  */
-function CoachingPackageModal({ onClose }: { onClose: () => void }) {
+function CoachingPackageModal({ tipe, onClose, onCreated }: { tipe: GuidanceTipe; onClose: () => void; onCreated?: () => void }) {
+  const g = GUIDANCE[tipe];
+  const MODES_LIST = guidanceModes(g.coachee);
+  const RULES = guidanceRules(g.actor);
   const [mode, setMode] = useState<CoachingMode>("development_dialogue");
   const [bawahan, setBawahan] = useState<Bawahan[]>([]);
   const [bawahanLoading, setBawahanLoading] = useState(false);
-  const [idPeserta, setIdPeserta] = useState<string>("");
+  const [nikSap, setNikSap] = useState<string>("");
   const [sessions, setSessions] = useState<SesiRow[]>(() =>
     Array.from({ length: MIN_SESI }, () => ({ tanggal: "", jam: "" })),
   );
@@ -384,16 +429,19 @@ function CoachingPackageModal({ onClose }: { onClose: () => void }) {
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, [onClose]);
 
-  // Muat daftar bawahan sekali saat mode Development Dialogue pertama dipakai.
+  // Muat daftar bawahan SEKALI saat mode Development Dialogue pertama dipakai.
+  // Pakai ref agar tidak refetch (hasil kosong + deps loading/length memicu loop → flicker).
+  const bawahanFetched = useRef(false);
   useEffect(() => {
-    if (mode !== "development_dialogue" || bawahan.length > 0 || bawahanLoading) return;
+    if (mode !== "development_dialogue" || bawahanFetched.current) return;
+    bawahanFetched.current = true;
     setBawahanLoading(true);
     fetch("/api/coaching/bawahan")
       .then((r) => (r.ok ? r.json() : { bawahan: [] }))
       .then((d) => setBawahan(d.bawahan ?? []))
       .catch(() => setBawahan([]))
       .finally(() => setBawahanLoading(false));
-  }, [mode, bawahan.length, bawahanLoading]);
+  }, [mode]);
 
   const setRow = (i: number, key: keyof SesiRow, val: string) =>
     setSessions((rows) => rows.map((r, idx) => (idx === i ? { ...r, [key]: val } : r)));
@@ -403,7 +451,7 @@ function CoachingPackageModal({ onClose }: { onClose: () => void }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (mode === "development_dialogue" && !idPeserta) { setError("Pilih bawahan (coachee) terlebih dahulu."); return; }
+    if (mode === "development_dialogue" && !nikSap) { setError("Pilih bawahan (coachee) terlebih dahulu."); return; }
     const filled = sessions.filter((s) => s.tanggal && s.jam);
     if (filled.length !== sessions.length) { setError("Lengkapi tanggal & jam mulai untuk semua sesi."); return; }
     if (sessions.length < MIN_SESI || sessions.length > MAX_SESI) { setError(`Jumlah sesi harus ${MIN_SESI}–${MAX_SESI}.`); return; }
@@ -412,11 +460,12 @@ function CoachingPackageModal({ onClose }: { onClose: () => void }) {
       const res = await fetch("/api/coaching/paket", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode, idPeserta: mode === "development_dialogue" ? Number(idPeserta) : null, sessions }),
+        body: JSON.stringify({ tipe, mode, nikSap: mode === "development_dialogue" ? nikSap : undefined, sessions }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setError(d.error ?? "Gagal menyimpan."); setSaving(false); return; }
       setDone({ kode: d.kode ?? "-", sessions: d.sessions ?? sessions.length });
+      onCreated?.();
     } catch { setError("Gagal terhubung ke server."); setSaving(false); }
   }
 
@@ -429,7 +478,7 @@ function CoachingPackageModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600"><UserPlus className="h-5 w-5" /></div>
-            <p className="text-[16px] font-bold text-white">Kelola Jadwal Coaching</p>
+            <p className="text-[16px] font-bold text-white">{g.title}</p>
           </div>
           <button onClick={onClose} aria-label="Tutup" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
             <X className="h-5 w-5" />
@@ -439,9 +488,9 @@ function CoachingPackageModal({ onClose }: { onClose: () => void }) {
         {done ? (
           <div className="p-6 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15"><CheckCircle2 className="h-6 w-6 text-emerald-400" /></div>
-            <p className="mt-3 text-[15px] font-semibold text-white">Jadwal coaching diajukan</p>
+            <p className="mt-3 text-[15px] font-semibold text-white">Jadwal {tipe === "mentor" ? "mentoring" : "coaching"} dipublikasikan</p>
             <p className="mt-1 text-[13px] text-white/55">
-              Paket <span className="font-semibold text-emerald-300">{done.kode}</span> berisi {done.sessions} sesi menunggu persetujuan.
+              Paket <span className="font-semibold text-emerald-300">{done.kode}</span> berisi {done.sessions} sesi sudah aktif dan tampil di profil.
             </p>
             <button onClick={onClose} className="mt-5 inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-600">
               Selesai
@@ -453,7 +502,7 @@ function CoachingPackageModal({ onClose }: { onClose: () => void }) {
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
               <p className="text-[13px] font-semibold text-white/80">Informasi</p>
               <ul className="mt-2 space-y-1.5">
-                {COACHING_RULES.map((r, i) => (
+                {RULES.map((r, i) => (
                   <li key={i} className="flex gap-2 text-[12.5px] leading-snug text-white/55">
                     <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-emerald-400" />
                     <span>{r}</span>
@@ -464,9 +513,9 @@ function CoachingPackageModal({ onClose }: { onClose: () => void }) {
 
             {/* Mode coaching */}
             <div>
-              <p className="mb-1.5 text-[12.5px] font-medium text-white/70">Mode Coaching *</p>
+              <p className="mb-1.5 text-[12.5px] font-medium text-white/70">Mode *</p>
               <div className="grid grid-cols-2 gap-2.5">
-                {COACHING_MODES.map((m) => (
+                {MODES_LIST.map((m) => (
                   <button key={m.key} type="button" onClick={() => setMode(m.key)}
                     className={`rounded-xl border p-3 text-left transition-colors ${mode === m.key ? "border-emerald-500/50 bg-emerald-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]"}`}>
                     <span className={`block text-[13.5px] font-semibold ${mode === m.key ? "text-emerald-300" : "text-white"}`}>{m.label}</span>
@@ -480,14 +529,14 @@ function CoachingPackageModal({ onClose }: { onClose: () => void }) {
             {mode === "development_dialogue" && (
               <div>
                 <label className="mb-1.5 block text-[12.5px] font-medium text-white/70">Bawahan (Coachee) *</label>
-                <select value={idPeserta} onChange={(e) => setIdPeserta(e.target.value)} disabled={bawahanLoading || bawahan.length === 0} className={inputCls}>
-                  <option value="">{bawahanLoading ? "Memuat bawahan…" : bawahan.length === 0 ? "Tidak ada bawahan terdaftar" : "— Pilih bawahan —"}</option>
+                <select value={nikSap} onChange={(e) => setNikSap(e.target.value)} disabled={bawahanLoading || bawahan.length === 0} className={inputCls}>
+                  <option value="">{bawahanLoading ? "Memuat bawahan…" : bawahan.length === 0 ? "Tidak ada bawahan" : "— Pilih bawahan —"}</option>
                   {bawahan.map((bw) => (
-                    <option key={bw.id} value={bw.id}>{bw.nama}{bw.jabatan ? ` — ${bw.jabatan}` : ""}</option>
+                    <option key={bw.nikSap} value={bw.nikSap}>{bw.nama}{bw.psa ? ` — ${bw.psa}` : ""}</option>
                   ))}
                 </select>
                 {!bawahanLoading && bawahan.length === 0 && (
-                  <p className="mt-1 text-[11.5px] text-amber-300/80">Belum ada bawahan yang terhubung ke akun Anda. Gunakan mode Publik atau hubungi admin.</p>
+                  <p className="mt-1 text-[11.5px] text-amber-300/80">Tidak ada bawahan untuk akun Anda di AGHRIS. Gunakan mode Publik.</p>
                 )}
               </div>
             )}
@@ -538,6 +587,154 @@ function CoachingPackageModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+
+const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
+  diterima: { label: "Aktif", cls: "bg-emerald-500/15 text-emerald-300" },
+  pending: { label: "Menunggu", cls: "bg-amber-500/15 text-amber-300" },
+  ditolak: { label: "Ditolak", cls: "bg-red-500/15 text-red-300" },
+};
+const MODE_LABEL: Record<string, string> = { development_dialogue: "Development Dialogue", publik: "Publik" };
+
+/**
+ * Daftar Paket Coaching/Mentoring yang sudah dibuat oleh pembimbing yang login.
+ * Tiap paket bisa diklik untuk melihat detail sesinya (jadwal pertemuan).
+ */
+function GuidancePackages({ tipe, reload }: { tipe: GuidanceTipe; reload: number }) {
+  const noun = tipe === "mentor" ? "Mentoring" : "Coaching";
+  const [pakets, setPakets] = useState<Paket[] | null>(null);
+  const [err, setErr] = useState(false);
+  const [open, setOpen] = useState<Paket | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setPakets(null);
+    setErr(false);
+    fetch(`/api/coaching/paket?tipe=${tipe}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => { if (alive) setPakets(d.pakets ?? []); })
+      .catch(() => { if (alive) setErr(true); });
+    return () => { alive = false; };
+  }, [tipe, reload]);
+
+  return (
+    <section className="mt-5">
+      <h3 className="mb-2.5 flex items-center gap-2 text-[14px] font-semibold text-white/80">
+        <CalendarDays className="h-4 w-4 text-emerald-400" /> Paket {noun} yang Anda Buat
+      </h3>
+
+      {err && <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">Gagal memuat paket {noun.toLowerCase()}.</p>}
+
+      {!pakets && !err && (
+        <div className="space-y-3">
+          {[0, 1].map((i) => (
+            <SkeletonCard key={i} className="flex items-start gap-4">
+              <Skeleton className="h-11 w-11 rounded-xl" />
+              <div className="flex-1"><Skeleton className="h-4 w-1/3" /><Skeleton className="mt-2 h-3 w-1/2" /></div>
+            </SkeletonCard>
+          ))}
+        </div>
+      )}
+
+      {pakets && pakets.length === 0 && (
+        <p className="rounded-xl border border-white/10 bg-white/[0.03] p-5 text-center text-[13px] text-white/50">
+          Anda belum membuat paket {noun.toLowerCase()}. Klik “Buat Paket {noun}” di atas untuk menyusun jadwal.
+        </p>
+      )}
+
+      {pakets && pakets.length > 0 && (
+        <div className="space-y-3">
+          {pakets.map((p) => {
+            const badge = STATUS_BADGE[p.statusApproval ?? ""] ?? { label: p.statusApproval ?? "—", cls: "bg-white/10 text-white/55" };
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setOpen(p)}
+                className="group flex w-full items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition-colors hover:border-emerald-500/50 hover:bg-white/[0.05]"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600"><CalendarDays className="h-5 w-5" /></div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[15px] font-semibold leading-snug group-hover:text-emerald-200">{p.kode}</p>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${badge.cls}`}>{badge.label}</span>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-white/55">
+                    {p.mode && <span>{MODE_LABEL[p.mode] ?? p.mode}</span>}
+                    <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> {p.sessions.length} sesi</span>
+                    <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {p.jpl} JPL</span>
+                    {p.peserta?.nama && <span className="inline-flex items-center gap-1"><UserPlus className="h-3.5 w-3.5" /> {p.peserta.nama}</span>}
+                  </div>
+                </div>
+                <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-white/30 transition-transform group-hover:translate-x-0.5 group-hover:text-white/70" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {open && <PackageDetailModal paket={open} onClose={() => setOpen(null)} />}
+    </section>
+  );
+}
+
+/** Modal detail paket — daftar sesi pertemuan (jadwal) sebuah paket. */
+function PackageDetailModal({ paket, onClose }: { paket: Paket; onClose: () => void }) {
+  const noun = paket.tipe === "mentor" ? "Mentoring" : "Coaching";
+  const badge = STATUS_BADGE[paket.statusApproval ?? ""] ?? { label: paket.statusApproval ?? "—", cls: "bg-white/10 text-white/55" };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+
+  return (
+    <div role="dialog" aria-modal="true" onClick={onClose}
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/85 p-3 backdrop-blur-sm sm:p-6">
+      <div onClick={(e) => e.stopPropagation()} className="my-auto w-full max-w-lg rounded-2xl border border-white/10 bg-[#1d1f1c] shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[16px] font-bold leading-snug text-white">{paket.kode}</p>
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${badge.cls}`}>{badge.label}</span>
+            </div>
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-white/45">
+              <span>Paket {noun}</span>
+              {paket.mode && <span>{MODE_LABEL[paket.mode] ?? paket.mode}</span>}
+              <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {paket.jpl} JPL</span>
+              {paket.peserta?.nama && <span className="inline-flex items-center gap-1"><UserPlus className="h-3.5 w-3.5" /> {paket.peserta.nama}</span>}
+            </p>
+          </div>
+          <button onClick={onClose} aria-label="Tutup" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-4">
+          <h4 className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-white/70">
+            <CalendarDays className="h-4 w-4 text-emerald-400" /> Jadwal Sesi ({paket.sessions.length})
+          </h4>
+          {paket.sessions.length === 0 ? (
+            <p className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-center text-[13px] text-white/45">Belum ada sesi pada paket ini.</p>
+          ) : (
+            <ul className="space-y-2.5">
+              {paket.sessions.map((s) => (
+                <li key={s.urutan} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                  <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-[12px] font-bold text-emerald-300">{s.urutan}</span>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-white/55">Sesi {s.urutan}</p>
+                    <p className="text-[14px] font-semibold text-white">{fmtDateTime(s.tanggal) ?? "—"}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Modal detail kelas — daftar modul + materi, dan sertifikat. */
 function ClassDetailModal({ loading, err, detail, onClose }: { loading: boolean; err: boolean; detail: ClassDetail | null; onClose: () => void }) {

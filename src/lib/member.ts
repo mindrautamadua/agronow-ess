@@ -14,6 +14,18 @@ export async function currentMemberId(): Promise<number> {
   return Number(process.env.CURRENT_MEMBER_ID ?? 6063);
 }
 
+/**
+ * NIK SAP user yang sedang login — dipakai sebagai `nik_sap_atasan` saat memanggil
+ * API AGHRIS. Dari sesi (`niksap`); fallback ke `_member` (nip_sap / member_nip)
+ * untuk mode dev tanpa sesi.
+ */
+export async function currentNikSap(): Promise<string | null> {
+  const session = await getSession();
+  if (session?.niksap) return String(session.niksap).trim() || null;
+  const m = await getMember();
+  return (m?.nip_sap || m?.member_nip || "").trim() || null;
+}
+
 export interface MemberRow {
   member_id: number;
   member_name: string | null;

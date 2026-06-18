@@ -388,7 +388,7 @@ export default function HomePage() {
           ))}
           {/* scrim atas agar header/nav terbaca di atas area gambar terang */}
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-[5] h-28 bg-gradient-to-b from-black/55 to-transparent" />
-          <div className="absolute bottom-56 left-1/2 z-20 flex -translate-x-1/2 gap-2 sm:bottom-60">
+          <div className="absolute bottom-28 left-1/2 z-20 flex -translate-x-1/2 gap-2 sm:bottom-60">
             {CAROUSEL.map((_, i) => (
               <button key={i} onClick={() => setSlide(i)} className={`h-2 rounded-full transition-all ${i === slide ? "w-6 bg-white" : "w-2 bg-white/50"}`} aria-label={`Slide ${i + 1}`} />
             ))}

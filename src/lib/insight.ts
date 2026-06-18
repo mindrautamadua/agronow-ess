@@ -31,6 +31,15 @@ export interface LibraryItem {
 
 // Poster pesan direksi di-host terpisah (sama dengan halaman produksi /whatsnew/ceo_note).
 const PD_IMG_BASE = "https://insight.agronow.co.id/media/uploads/pd/";
+// Host `insight.agronow.co.id` TIDAK terjangkau dari internet publik (Vercel),
+// jadi foto direksi di-host lokal di `public/img/direksi/` dengan nama file asli
+// (basename dari kolom `gambar`). Jika file lokal tak ada, UI jatuh ke kartu
+// inisial (lihat DireksiCard.onError).
+function direksiLocalImg(gambar: string | null): string | null {
+  if (!gambar) return null;
+  const file = gambar.split("/").pop();
+  return file ? "/img/direksi/" + file : null;
+}
 // Gambar konten (_content/_media) di /media/image (berita & digital library).
 const MEDIA_IMG_BASE = "https://agronow.co.id/media/image/";
 const NEWS_SECTION = 12;
@@ -123,7 +132,7 @@ export async function getDireksi(limit = 12, offset = 0, q?: string): Promise<Pa
     items: rows.map((d) => ({
       id: d.id, nama: clean(d.nama), jabatan: clean(d.jabatan),
       pesan: richPesan(d.pesan),
-      image: d.gambar ? PD_IMG_BASE + d.gambar : null,
+      image: direksiLocalImg(d.gambar),
       initials: clean(d.nama).split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase(),
     })),
     total: count[0]?.n ?? 0,

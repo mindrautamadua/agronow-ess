@@ -6,7 +6,7 @@ import AppHeader from "@/components/AppHeader";
 import BottomGradient from "@/components/BottomGradient";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
 import { VideoCard, VideoModal, type VideoCardData } from "@/components/InsightVideo";
-import { ArrowLeft, Quote as QuoteIcon, X, Eye, Search, MessageSquare, Heart, Pencil } from "lucide-react";
+import { ArrowLeft, Quote as QuoteIcon, X, Eye, Search, MessageSquare, Heart, Pencil, Building2, ChevronDown } from "lucide-react";
 import { SECTION_BY_SLUG } from "@/lib/insight-sections";
 
 interface DireksiItem { id: number; nama: string; jabatan: string; pesan: string | null; image: string | null; initials: string }
@@ -14,11 +14,12 @@ interface BeritaItem { id: number; title: string; image: string | null; date: st
 interface ArticleItem extends BeritaItem { views: number }
 interface QuoteItem { text: string; author: string }
 interface LibraryCat { id: number; name: string; alias: string; count: number }
+interface MovieEntity { groupId: number; name: string; count: number }
 interface LibraryItem { id: number; title: string; alias: string; image: string | null; date: string | null; author: string | null; category: string | null; body: string | null }
 interface DiskusiItem { id: number; judul: string; preview: string; body: string | null; penulis: string; penulisImg: string | null; tgl: string | null; balasan: number; likes: number; likedByMe: boolean }
 interface DiskusiReply { id: number; memberId: number; penulis: string; penulisImg: string | null; tgl: string | null; body: string | null; likes: number; likedByMe: boolean }
 type Item = VideoCardData | DireksiItem | BeritaItem | ArticleItem | LibraryItem | QuoteItem | DiskusiItem;
-interface SectionData { kind: string; items: Item[]; total: number; categories?: LibraryCat[] }
+interface SectionData { kind: string; items: Item[]; total: number; categories?: LibraryCat[]; entities?: MovieEntity[] }
 
 const fmtTgl = (s: string | null) => {
   if (!s) return "";
@@ -44,11 +45,17 @@ export default function InsightSectionPage() {
   const [diskusi, setDiskusi] = useState<DiskusiItem | null>(null);
   const [categories, setCategories] = useState<LibraryCat[]>([]);
   const [category, setCategory] = useState("all"); // filter Digital Library
+  const [entities, setEntities] = useState<MovieEntity[]>([]); // entitas movie
+  const [entity, setEntity] = useState("all"); // filter entitas; "all" = seluruh entitas
   const [qInput, setQInput] = useState(""); // teks di kotak cari
   const [q, setQ] = useState(""); // query ter-debounce yang dipakai fetch
 
   const isLibrary = meta?.kind === "library";
+  const isVideo = meta?.kind === "video";
   const isSoon = !meta || meta.kind === "soon";
+
+  // Reset filter saat berpindah section agar tak terbawa antar halaman.
+  useEffect(() => { setEntity("all"); setEntities([]); setCategory("all"); }, [section]);
 
   // Section eksternal (mis. SOP → OneHub): alihkan langsung ke URL tujuan.
   useEffect(() => {
@@ -64,6 +71,7 @@ export default function InsightSectionPage() {
   const load = useCallback(async (offset: number) => {
     const qs = new URLSearchParams({ offset: String(offset) });
     if (isLibrary && category !== "all") qs.set("category", category);
+    if (isVideo && entity !== "all") qs.set("entity", entity);
     if (q) qs.set("q", q);
     const r = await fetch(`/api/insight/${section}?${qs}`);
     const d: SectionData = await r.json();
@@ -71,7 +79,8 @@ export default function InsightSectionPage() {
     setItems((prev) => (offset === 0 ? d.items : [...prev, ...d.items]));
     setTotal(d.total);
     if (d.categories) setCategories(d.categories);
-  }, [section, isLibrary, category, q]);
+    if (d.entities) setEntities(d.entities);
+  }, [section, isLibrary, isVideo, category, entity, q]);
 
   useEffect(() => {
     if (isSoon) { setLoading(false); return; }
@@ -119,6 +128,27 @@ export default function InsightSectionPage() {
                 <X className="h-4 w-4" />
               </button>
             )}
+          </div>
+        )}
+
+        {/* Filter entitas (section movie) — termasuk opsi seluruh entitas */}
+        {isVideo && entities.length > 0 && (
+          <div className="mt-3">
+            <label className="relative inline-flex items-center">
+              <Building2 className="pointer-events-none absolute left-3 h-4 w-4 text-emerald-300/70" />
+              <span className="sr-only">Pilih entitas</span>
+              <select
+                value={entity}
+                onChange={(e) => setEntity(e.target.value)}
+                className="appearance-none rounded-full border border-white/10 bg-white/[0.04] py-2.5 pl-9 pr-9 text-[13px] font-medium text-white outline-none transition-colors hover:bg-white/[0.07] focus:border-emerald-500/60 [&>option]:bg-[#1d1f1c] [&>option]:text-white"
+              >
+                <option value="all">Semua Entitas</option>
+                {entities.map((en) => (
+                  <option key={en.groupId} value={en.groupId}>{en.name} ({en.count})</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-white/40" />
+            </label>
           </div>
         )}
 

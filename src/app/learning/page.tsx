@@ -78,6 +78,11 @@ const fmtDate = (s: string | null) => {
   return isNaN(d.getTime()) ? null : d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
 };
 
+// "earned/target Unit" — saat target 0 (tahun tanpa target, mode history)
+// tampilkan capaian saja tanpa "/0" yang membingungkan.
+const progressLabel = (earned: number, target: number, unit: string) =>
+  target > 0 ? `${earned}/${target} ${unit}` : `${earned} ${unit}`;
+
 // Format "tanggal jam" sesi paket (timestamp dari DB, mis. "2026-07-01 09:00:00").
 const fmtDateTime = (s: string | null) => {
   if (!s) return null;
@@ -102,6 +107,9 @@ function LearningInner() {
   const [openType, setOpenType] = useState<string | null>(null);
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Pemilih tahun — default tahun berjalan; daftar opsi datang dari API.
+  const [year, setYear] = useState(() => new Date().getFullYear());
+  const [years, setYears] = useState<number[]>(() => [new Date().getFullYear()]);
 
   // Modal "Kelola Jadwal" Coaching/Mentoring (khusus pembimbing BOD-1/BOD-2 pada
   // view ?metode=mb_c / mb_m). Null = tertutup.
@@ -129,17 +137,25 @@ function LearningInner() {
 
   useEffect(() => { setFilter(paramFilter(params)); }, [params]);
   useEffect(() => {
+    let alive = true;
     setErr(null);
-    fetch("/api/learning")
+    setData(null); // tampilkan skeleton saat ganti tahun
+    fetch(`/api/learning?year=${year}`)
       .then(async (r) => ({ ok: r.ok, status: r.status, body: await r.json().catch(() => ({})) }))
       .then(({ ok, status, body }) => {
-        if (ok && body.summary) { setData(body); return; }
+        if (!alive) return;
+        if (ok && body.summary) {
+          setData(body);
+          if (Array.isArray(body.years) && body.years.length) setYears(body.years);
+          return;
+        }
         // Susun pesan dari respons API; sertakan detail teknis bila ada (dev).
         const msg = body.error || `Permintaan gagal (HTTP ${status}).`;
         setErr(body.detail ? `${msg} — ${body.detail}` : msg);
       })
-      .catch((e) => setErr(`Tidak dapat terhubung ke server: ${e instanceof Error ? e.message : "kesalahan jaringan"}.`));
-  }, []);
+      .catch((e) => { if (alive) setErr(`Tidak dapat terhubung ke server: ${e instanceof Error ? e.message : "kesalahan jaringan"}.`); });
+    return () => { alive = false; };
+  }, [year]);
 
   const activeMethod = METHOD_LABEL[filter] ? filter : null;
   const classes = (data?.classes ?? []).filter(
@@ -159,8 +175,27 @@ function LearningInner() {
       <AppHeader active="Progres Pembelajaran" />
 
       <main className="mx-auto max-w-[1100px] px-4 pb-20">
-        <h1 className="mt-4 text-2xl font-bold sm:text-3xl">Aktivitas Pembelajaran</h1>
-        <p className="mt-1 text-[14px] text-white/60">Progres pengembangan kompetensi dengan kerangka 70 · 20 · 10.</p>
+        <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold sm:text-3xl">Aktivitas Pembelajaran</h1>
+            <p className="mt-1 text-[14px] text-white/60">Progres pengembangan kompetensi dengan kerangka 70 · 20 · 10.</p>
+          </div>
+          {/* Pemilih tahun — default tahun berjalan. */}
+          <label className="relative inline-flex shrink-0 items-center">
+            <CalendarDays className="pointer-events-none absolute left-3 h-4 w-4 text-emerald-300/70" />
+            <span className="sr-only">Pilih tahun</span>
+            <select
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+              className="appearance-none rounded-full border border-white/12 bg-white/[0.05] py-2 pl-9 pr-9 text-[13px] font-semibold text-white outline-none transition-colors hover:bg-white/[0.08] focus:border-emerald-400/50 [&>option]:bg-[#1d1f1c] [&>option]:text-white"
+            >
+              {years.map((y) => (
+                <option key={y} value={y}>Tahun {y}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-white/40" />
+          </label>
+        </div>
 
         {err && (
           <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
@@ -204,7 +239,7 @@ function LearningInner() {
                   <div key={b.key} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                     <div className="flex items-center justify-between">
                       <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${meta.accent}`}><Icon className="h-5 w-5" /></div>
-                      <span className="text-sm font-bold text-white/70">{b.earned}/{b.target} Jam</span>
+                      <span className="text-sm font-bold text-white/70">{progressLabel(b.earned, b.target, "Jam")}</span>
                     </div>
                     <p className="mt-4 text-[15px] font-semibold">{meta.short}</p>
                     <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/10">
@@ -219,7 +254,7 @@ function LearningInner() {
             <div className="mt-4 flex flex-wrap items-center gap-3 text-[13px] text-white/60">
               <span className="inline-flex items-center gap-1.5"><BadgeCheck className="h-4 w-4 text-emerald-400" /> {data.summary.totalClasses} kelas</span>
               <span className="inline-flex items-center gap-1.5"><Award className="h-4 w-4 text-amber-400" /> {data.summary.certificates} sertifikat</span>
-              <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4 text-sky-400" /> Total {data.summary.total.earned}/{data.summary.total.target} Jam ({data.summary.total.pct}%)</span>
+              <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4 text-sky-400" /> Total {progressLabel(data.summary.total.earned, data.summary.total.target, "Jam")}{data.summary.total.target > 0 ? ` (${data.summary.total.pct}%)` : ""}</span>
             </div>
 
             {/* Tabs */}
@@ -253,7 +288,7 @@ function LearningInner() {
                 <section className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[15px] font-semibold">Progres JPL per Jenis — {meta?.short ?? bk.label}</p>
-                    <span className="text-[13px] font-bold text-white/70">{bk.earned}/{bk.target} Jam</span>
+                    <span className="text-[13px] font-bold text-white/70">{progressLabel(bk.earned, bk.target, "Jam")}</span>
                   </div>
                   <p className="mt-1 text-[12px] text-white/45">Klik jenis untuk melihat pelatihan yang kamu jalani.</p>
                   <div className="mt-4 space-y-2.5">
@@ -266,7 +301,7 @@ function LearningInner() {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-2 text-[13px]">
                                 <span className="font-medium">{t.label} <span className="text-white/40">· {typeClasses.length} pelatihan</span></span>
-                                <span className="text-white/55">{t.earned}/{t.target} JPL · {t.pct}%</span>
+                                <span className="text-white/55">{progressLabel(t.earned, t.target, "JPL")}{t.target > 0 ? ` · ${t.pct}%` : ""}</span>
                               </div>
                               <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-white/10">
                                 <div className={`h-full rounded-full bg-gradient-to-r ${meta?.accent ?? "from-emerald-500 to-green-600"}`} style={{ width: `${Math.min(t.pct, 100)}%` }} />

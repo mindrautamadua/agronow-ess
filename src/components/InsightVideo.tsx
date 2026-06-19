@@ -1,14 +1,21 @@
 "use client";
 
 import { useEffect } from "react";
-import { Play, X } from "lucide-react";
+import { Play, X, Building2 } from "lucide-react";
 
 export interface VideoCardData {
   id: number; judul: string; thumb: string | null; link: string; videoId: string | null;
-  tipe?: string; tgl?: string | null;
+  tipe?: string; tgl?: string | null; entitas?: string | null;
 }
 
+const fmtTgl = (s: string | null | undefined) => {
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+};
+
 export function VideoCard({ c, onPlay }: { c: VideoCardData; onPlay: (c: VideoCardData) => void }) {
+  const tgl = fmtTgl(c.tgl);
   return (
     <button type="button" onClick={() => onPlay(c)} className="group block w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] text-left">
       <div className="relative aspect-video overflow-hidden bg-black">
@@ -23,7 +30,13 @@ export function VideoCard({ c, onPlay }: { c: VideoCardData; onPlay: (c: VideoCa
       </div>
       <div className="p-3.5">
         <p className="line-clamp-2 text-[13.5px] font-semibold leading-snug">{c.judul}</p>
-        {c.tgl && <p className="mt-1 text-[12px] text-white/45">{c.tgl}</p>}
+        {c.entitas && (
+          <span className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium text-white/65">
+            <Building2 className="h-3 w-3 shrink-0 text-emerald-300/70" />
+            <span className="truncate">{c.entitas}</span>
+          </span>
+        )}
+        {tgl && <p className="mt-1.5 text-[12px] text-white/45">{tgl}</p>}
       </div>
     </button>
   );

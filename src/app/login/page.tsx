@@ -75,7 +75,8 @@ export default function LoginPage() {
         return;
       }
       if (!res.ok) {
-        setError(data?.error ?? "Gagal masuk. Coba lagi.");
+        const base = data?.error ?? `Gagal masuk (HTTP ${res.status}).`;
+        setError(data?.detail ? `${base} — ${data.detail}` : base);
         setLoading(false);
         return;
       }

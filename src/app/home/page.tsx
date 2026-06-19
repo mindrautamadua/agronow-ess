@@ -400,7 +400,10 @@ export default function HomePage() {
             {/* Header */}
             <div className="relative z-10 flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h3 className="text-2xl font-bold sm:text-[26px]">Progres pembelajaran</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-2xl font-bold sm:text-[26px]">Progres pembelajaran</h3>
+                  <span className="rounded-full bg-black/25 px-2.5 py-0.5 text-[11px] font-semibold text-white/85">Tahun {new Date().getFullYear()}</span>
+                </div>
                 {total ? (
                   <p className="mt-1 text-[13.5px] text-white/85">{Math.max(total.target - total.earned, 0)} jam lagi untuk menyelesaikan misi</p>
                 ) : (

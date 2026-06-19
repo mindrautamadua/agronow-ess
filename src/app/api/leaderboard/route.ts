@@ -129,7 +129,7 @@ export async function GET(req: Request) {
     };
 
     const top = lb.top.map((t) => ({
-      rank: t.rank, name: t.name, initials: t.initials, role: t.role, points: t.points,
+      mid: t.mid, rank: t.rank, name: t.name, initials: t.initials, role: t.role, points: t.points,
       isMe: t.mid === memberId,
     }));
 

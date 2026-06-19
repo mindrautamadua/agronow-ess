@@ -75,8 +75,32 @@ function currentYear(): number {
   return new Date().getFullYear();
 }
 
-/** Ringkasan progres 70-20-10 untuk satu member. */
+/** Daftar tahun untuk pemilih di UI, terbaru dulu. Gabungan tahun yang punya
+ *  target JPL DAN tahun yang member-nya punya kelas (agar history lama bisa
+ *  dilihat walau belum ada target). Tahun berjalan selalu disertakan. */
+export async function getAvailableYears(memberId: number): Promise<number[]> {
+  const rows = await query<{ tahun: number | null }>(
+    `SELECT tahun FROM _learning_kategori_jpl WHERE tahun IS NOT NULL
+     UNION
+     SELECT EXTRACT(YEAR FROM c.cr_date_start)::int AS tahun
+       FROM _classroom_member m
+       JOIN _classroom c ON c.cr_id = m.cr_id
+      WHERE m.member_id = ? AND c.cr_date_start IS NOT NULL`,
+    [memberId],
+  );
+  const years = new Set<number>(
+    rows.map((r) => Number(r.tahun)).filter((n) => Number.isInteger(n) && n >= 2000 && n <= 2100),
+  );
+  years.add(currentYear());
+  return [...years].sort((a, b) => b - a);
+}
+
+/** Ringkasan progres 70-20-10 untuk satu member pada satu tahun.
+ *  Capaian (earned), jumlah kelas, & sertifikat difilter berdasarkan tahun
+ *  `cr_date_start` agar konsisten dengan pemilih tahun. */
 export async function getLearningSummary(memberId: number, year = currentYear()): Promise<LearningSummary> {
+  const yStart = `${year}-01-01`, yEnd = `${year + 1}-01-01`;
+
   const earnedRows = await query<{ cat_id: number; kategori: string; earned_raw: number | null }>(
     `SELECT c.id_learning_kategori1 AS cat_id, lk.kategori,
             SUM(c.jpl_learning_kategori1) FILTER (WHERE m.is_verified = '1') AS earned_raw
@@ -84,18 +108,21 @@ export async function getLearningSummary(memberId: number, year = currentYear())
        JOIN _classroom c ON c.cr_id = m.cr_id
        JOIN _learning_kategori lk ON lk.id = c.id_learning_kategori1
       WHERE m.member_id = ?
+        AND c.cr_date_start >= ?::date AND c.cr_date_start < ?::date
         AND lk.kategori IN ('metode_belajar10','metode_belajar20','metode_belajar70')
       GROUP BY c.id_learning_kategori1, lk.kategori`,
-    [memberId],
+    [memberId, yStart, yEnd],
   );
 
+  // Semua jenis metode (dari _learning_kategori) + target tahun ybs (0 bila tak
+  // ada). LEFT JOIN — bukan INNER — agar tahun TANPA target (mode history, mis.
+  // 2024) tetap memunculkan seluruh jenis sehingga capaian lama bisa dilihat.
   const targetRows = await query<{ cat_id: number; kategori: string; kode: string | null; nama: string | null; target: number }>(
-    `SELECT j.id_kategori AS cat_id, lk.kategori, lk.kode, lk.nama, j.jpl AS target
-       FROM _learning_kategori_jpl j
-       JOIN _learning_kategori lk ON lk.id = j.id_kategori
-      WHERE j.tahun = ?
-        AND lk.kategori IN ('metode_belajar10','metode_belajar20','metode_belajar70')
-      ORDER BY j.id_kategori`,
+    `SELECT lk.id AS cat_id, lk.kategori, lk.kode, lk.nama, COALESCE(j.jpl, 0) AS target
+       FROM _learning_kategori lk
+       LEFT JOIN _learning_kategori_jpl j ON j.id_kategori = lk.id AND j.tahun = ?
+      WHERE lk.kategori IN ('metode_belajar10','metode_belajar20','metode_belajar70')
+      ORDER BY lk.id`,
     [year],
   );
 
@@ -112,7 +139,9 @@ export async function getLearningSummary(memberId: number, year = currentYear())
     const bucket = KATEGORI_TO_BUCKET[t.kategori];
     if (!bucket) continue;
     const target = Number(t.target ?? 0);
-    const earned = Math.min(earnedByCat.get(t.cat_id) ?? 0, target); // di-cap sesuai target (selaras app asli)
+    const earnedRaw = earnedByCat.get(t.cat_id) ?? 0;
+    // Cap ke target hanya bila target ada; tanpa target (history) tampilkan apa adanya.
+    const earned = target > 0 ? Math.min(earnedRaw, target) : earnedRaw;
     agg[bucket].target += target;
     agg[bucket].earned += earned;
     agg[bucket].types.push({
@@ -132,13 +161,17 @@ export async function getLearningSummary(memberId: number, year = currentYear())
   const totalTarget = buckets.reduce((s, b) => s + b.target, 0);
 
   const [{ n: totalClasses } = { n: 0 }] = await query<{ n: number }>(
-    `SELECT COUNT(*)::int AS n FROM _classroom_member WHERE member_id = ?`,
-    [memberId],
+    `SELECT COUNT(*)::int AS n FROM _classroom_member m
+       JOIN _classroom c ON c.cr_id = m.cr_id
+      WHERE m.member_id = ? AND c.cr_date_start >= ?::date AND c.cr_date_start < ?::date`,
+    [memberId, yStart, yEnd],
   );
   const [{ n: certificates } = { n: 0 }] = await query<{ n: number }>(
-    `SELECT COUNT(*)::int AS n FROM _classroom_member
-      WHERE member_id = ? AND berkas_sertifikat IS NOT NULL AND berkas_sertifikat <> ''`,
-    [memberId],
+    `SELECT COUNT(*)::int AS n FROM _classroom_member m
+       JOIN _classroom c ON c.cr_id = m.cr_id
+      WHERE m.member_id = ? AND m.berkas_sertifikat IS NOT NULL AND m.berkas_sertifikat <> ''
+        AND c.cr_date_start >= ?::date AND c.cr_date_start < ?::date`,
+    [memberId, yStart, yEnd],
   );
 
   return {
@@ -248,8 +281,11 @@ export async function getClassDetail(memberId: number, crmId: number): Promise<C
   };
 }
 
-/** Daftar kelas/aktivitas pembelajaran member (terbaru dulu). */
-export async function getMemberClasses(memberId: number): Promise<LearningClass[]> {
+/** Daftar kelas/aktivitas pembelajaran member (terbaru dulu).
+ *  Bila `year` diberikan, hanya kelas dengan `cr_date_start` di tahun itu. */
+export async function getMemberClasses(memberId: number, year?: number): Promise<LearningClass[]> {
+  const yearFilter = year ? "AND c.cr_date_start >= ?::date AND c.cr_date_start < ?::date" : "";
+  const yearParams: unknown[] = year ? [`${year}-01-01`, `${year + 1}-01-01`] : [];
   const rows = await query<{
     crm_id: number; cr_id: number; cr_name: string; cr_type: string | null; cr_status: string | null;
     cr_date_start: string | null; cr_date_end: string | null; cr_has_certificate: number | null;
@@ -265,9 +301,9 @@ export async function getMemberClasses(memberId: number): Promise<LearningClass[
        FROM _classroom_member m
        JOIN _classroom c ON c.cr_id = m.cr_id
        LEFT JOIN _learning_kategori lk ON lk.id = c.id_learning_kategori1
-      WHERE m.member_id = ?
+      WHERE m.member_id = ? ${yearFilter}
       ORDER BY c.cr_date_start DESC NULLS LAST`,
-    [memberId],
+    [memberId, ...yearParams],
   );
 
   return rows.map((r) => ({

@@ -46,6 +46,25 @@ export async function POST(req: Request) {
     return Response.json({ error: "NIK dan password wajib diisi" }, { status: 400 });
   }
 
+  try {
+    return await authenticate(nik, password, groupId);
+  } catch (e) {
+    // Kesalahan tak terduga (mis. koneksi DB gagal) — kembalikan JSON yang jelas
+    // alih-alih 500 kosong yang memaksa frontend memakai pesan generik.
+    console.error("/api/auth/login", e);
+    const detail = e instanceof Error ? e.message : String(e);
+    return Response.json(
+      {
+        error: "Tidak dapat memproses login karena kendala server (kemungkinan koneksi database).",
+        detail: process.env.NODE_ENV === "production" ? undefined : detail,
+      },
+      { status: 500 },
+    );
+  }
+}
+
+/** Inti autentikasi: validasi holding → fallback DB → terbitkan sesi. */
+async function authenticate(nik: string, password: string, groupId: string): Promise<Response> {
   // ── 1. Validasi ke API holding (sumber utama) ──
   let holding: HoldingUser | undefined;
   try {

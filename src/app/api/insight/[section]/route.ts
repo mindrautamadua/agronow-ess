@@ -1,4 +1,4 @@
-import { getWebinars, getMovies, getDireksi, getQuotes, getBerita, getArticle, getLibrary, getLibraryCategories, getDiskusi, getDiskusiReplies, getChatrooms, getChatMessages } from "@/lib/insight";
+import { getWebinars, getMovies, getMovieEntities, getDireksi, getQuotes, getBerita, getArticle, getLibrary, getLibraryCategories, getDiskusi, getDiskusiReplies, getChatrooms, getChatMessages } from "@/lib/insight";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -13,14 +13,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ section:
   const offset = Math.max(0, Number(sp.get("offset") ?? 0) || 0);
   const q = sp.get("q") || "";
 
+  // Filter entitas (group) untuk section movie; "all"/kosong = seluruh entitas.
+  const entityParam = sp.get("entity");
+  const groupId = entityParam && entityParam !== "all" ? Number(entityParam) : undefined;
+  const validGroup = Number.isInteger(groupId) ? groupId : undefined;
+
   try {
     switch (section) {
       case "webinar":
         return Response.json({ kind: "video", ...(await getWebinars(PAGE_SIZE, offset, q)) });
-      case "short-movie":
-        return Response.json({ kind: "video", ...(await getMovies("short", PAGE_SIZE, offset, q)) });
-      case "vlog":
-        return Response.json({ kind: "video", ...(await getMovies("vlog", PAGE_SIZE, offset, q)) });
+      case "short-movie": {
+        const [data, entities] = await Promise.all([getMovies("short", PAGE_SIZE, offset, q, validGroup), getMovieEntities("short")]);
+        return Response.json({ kind: "video", ...data, entities });
+      }
+      case "vlog": {
+        const [data, entities] = await Promise.all([getMovies("vlog", PAGE_SIZE, offset, q, validGroup), getMovieEntities("vlog")]);
+        return Response.json({ kind: "video", ...data, entities });
+      }
       case "direksi":
         return Response.json({ kind: "direksi", ...(await getDireksi(PAGE_SIZE, offset, q)) });
       case "berita":

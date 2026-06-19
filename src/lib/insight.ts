@@ -9,7 +9,7 @@ import { clean, decodeEntities } from "./text";
 
 export interface VideoItem {
   id: number; judul: string; thumb: string | null; link: string; videoId: string | null;
-  tipe?: string; tgl?: string | null;
+  tipe?: string; tgl?: string | null; entitas?: string | null;
 }
 export interface DireksiItem {
   id: number; nama: string; jabatan: string;
@@ -353,22 +353,51 @@ export async function getWebinars(limit = 12, offset = 0, q?: string): Promise<P
   };
 }
 
-/** `kind`: "vlog" = tipe vlog; "short" = selain vlog; "all" = semua. */
-export async function getMovies(kind: "short" | "vlog" | "all", limit = 12, offset = 0, q?: string): Promise<Paged<VideoItem>> {
-  const cond = kind === "vlog" ? `tipe = 'vlog'` : kind === "short" ? `tipe IS DISTINCT FROM 'vlog'` : `TRUE`;
-  const s = search(q, "judul");
-  const where = `status = 'publish' AND ${cond}${s.sql}`;
+// SQL kondisi tipe movie, dipakai bersama oleh getMovies & getMovieEntities.
+const movieKindCond = (kind: "short" | "vlog" | "all", col = "tipe") =>
+  kind === "vlog" ? `${col} = 'vlog'` : kind === "short" ? `${col} IS DISTINCT FROM 'vlog'` : `TRUE`;
+
+/** Entitas (group) yang punya konten movie untuk `kind` tertentu — untuk filter
+ *  entitas di UI. Hanya entitas yang benar-benar memiliki konten yang muncul. */
+export interface MovieEntity { groupId: number; name: string; count: number }
+export async function getMovieEntities(kind: "short" | "vlog" | "all"): Promise<MovieEntity[]> {
+  const rows = await query<{ group_id: number | null; name: string | null; n: number }>(
+    `SELECT mv.group_id, g.group_name AS name, COUNT(*)::int AS n
+       FROM _movies mv
+       LEFT JOIN _group g ON g.group_id = mv.group_id
+      WHERE mv.status = 'publish' AND ${movieKindCond(kind, "mv.tipe")}
+      GROUP BY mv.group_id, g.group_name
+      ORDER BY n DESC, g.group_name`,
+  );
+  return rows
+    .filter((r) => r.group_id != null)
+    .map((r) => ({ groupId: Number(r.group_id), name: clean(r.name) || `Entitas ${r.group_id}`, count: Number(r.n) }));
+}
+
+/** `kind`: "vlog" = tipe vlog; "short" = selain vlog; "all" = semua.
+ *  `groupId` membatasi ke satu entitas; undefined = seluruh entitas. */
+export async function getMovies(kind: "short" | "vlog" | "all", limit = 12, offset = 0, q?: string, groupId?: number): Promise<Paged<VideoItem>> {
+  const cond = movieKindCond(kind, "mv.tipe");
+  const s = search(q, "mv.judul");
+  const groupCond = typeof groupId === "number" ? ` AND mv.group_id = ?` : "";
+  const where = `mv.status = 'publish' AND ${cond}${s.sql}${groupCond}`;
+  const whereParams = typeof groupId === "number" ? [...s.params, groupId] : s.params;
   const [rows, count] = await Promise.all([
-    query<{ id: number; judul: string; url: string | null; tipe: string | null }>(
-      `SELECT id, judul, url, tipe FROM _movies WHERE ${where} ORDER BY id DESC LIMIT ? OFFSET ?`,
-      [...s.params, limit, offset],
+    query<{ id: number; judul: string; url: string | null; tipe: string | null; tgl: string | null; entitas: string | null }>(
+      `SELECT mv.id, mv.judul, mv.url, mv.tipe, mv.tgl, g.group_name AS entitas
+         FROM _movies mv
+         LEFT JOIN _group g ON g.group_id = mv.group_id
+        WHERE ${where} ORDER BY mv.id DESC LIMIT ? OFFSET ?`,
+      [...whereParams, limit, offset],
     ),
-    query<{ n: number }>(`SELECT COUNT(*) AS n FROM _movies WHERE ${where}`, s.params),
+    query<{ n: number }>(`SELECT COUNT(*) AS n FROM _movies mv WHERE ${where}`, whereParams),
   ]);
   return {
     items: rows.map((m) => ({
       id: m.id, judul: clean(m.judul), thumb: yt(m.url), link: watch(m.url), videoId: m.url?.trim() ?? null,
       tipe: m.tipe === "vlog" ? "Vlog" : "Short Movie",
+      tgl: m.tgl,
+      entitas: clean(m.entitas) || null,
     })),
     total: count[0]?.n ?? 0,
   };

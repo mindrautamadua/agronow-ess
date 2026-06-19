@@ -23,7 +23,7 @@ const NAV: NavItem[] = [
   { label: "Insight Hub", href: "/insight-hub" },
   { label: "Chat", href: "/chat" },
   { label: "Profile", href: "/profile" },
-  { label: "Bantuan", href: "/bantuan/panduan", dropdown: [{ label: "Panduan", href: "/bantuan/panduan" }, { label: "FAQ", href: "/bantuan/faq" }] },
+  { label: "Bantuan", href: "/bantuan/panduan", dropdown: [{ label: "Panduan", href: "/bantuan/panduan" }, { label: "FAQ", href: "/bantuan/faq" }, { label: "Helpdesk", href: "/bantuan/helpdesk" }] },
   { label: "Logout", href: "/login" },
 ];
 

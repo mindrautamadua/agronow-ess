@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import NotificationBell from "@/components/NotificationBell";
+import LearningCurve from "@/components/LearningCurve";
+import Leaderboard from "@/components/Leaderboard";
 import {
   Menu, ChevronDown, ChevronLeft, ChevronRight, ExternalLink,
   Wallet, FileText, ArrowUpRight, Flame, ArrowRight, Sparkles,
@@ -133,7 +135,7 @@ const NAV: NavItem[] = [
   { label: "Insight Hub", href: "/insight-hub" },
   { label: "Chat", href: "/chat" },
   { label: "Profile", href: "/profile" },
-  { label: "Bantuan", href: "/bantuan/panduan", dropdown: [{ label: "Panduan", href: "/bantuan/panduan" }, { label: "FAQ", href: "/bantuan/faq" }] },
+  { label: "Bantuan", href: "/bantuan/panduan", dropdown: [{ label: "Panduan", href: "/bantuan/panduan" }, { label: "FAQ", href: "/bantuan/faq" }, { label: "Helpdesk", href: "/bantuan/helpdesk" }] },
   { label: "Logout", href: "/login" },
 ];
 
@@ -628,10 +630,28 @@ export default function HomePage() {
         </section>
 
         {/* Games */}
-        <section className="mt-14 pb-20">
+        <section className="mt-14">
           <div className="text-[28px] font-bold sm:text-4xl">Games (Coming Soon)</div>
           <div className="mt-2 max-w-4xl text-[16px] text-white/90 sm:text-xl">
             Game berasa belajar dengan tiap tantangannya dirancang buat bantu kamu ngerti materi sesuai tujuan belajar kamu.
+          </div>
+        </section>
+
+        {/* ───── Kurva Aktivitas Belajar ───── */}
+        <section className="mt-14">
+          <div className="text-[28px] font-bold sm:text-4xl">Kurva Aktivitas Belajar</div>
+          <div className="mt-2 max-w-4xl text-[16px] text-white/90 sm:text-xl">Perkembangan aktivitas belajar dalam satu tahun.</div>
+          <div className="mt-6">
+            <LearningCurve />
+          </div>
+        </section>
+
+        {/* ───── Peringkat & Top Contributors ───── */}
+        <section className="mt-14 pb-20">
+          <div className="text-[28px] font-bold sm:text-4xl">Peringkat Pembelajar</div>
+          <div className="mt-2 max-w-4xl text-[16px] text-white/90 sm:text-xl">Lihat posisimu dan para kontributor poin teratas di seluruh korporat.</div>
+          <div className="mt-6">
+            <Leaderboard />
           </div>
         </section>
       </main>

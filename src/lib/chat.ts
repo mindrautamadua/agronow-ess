@@ -15,7 +15,7 @@ export interface ChatConversation {
   lastText: string; lastTgl: string | null; lastFromMe: boolean; unread: number;
 }
 export interface ChatMessage { id: string; fromMe: boolean; text: string; tgl: string | null }
-export interface MemberLite { id: number; name: string; img: string | null; jabatan: string | null }
+export interface MemberLite { id: number; name: string; img: string | null; jabatan: string | null; entitas: string | null }
 
 const avatar = (img: string | null): string | null => (/^https?:\/\//i.test((img ?? "").trim()) ? (img as string).trim() : null);
 const sanitize = (t: string): string => t.replace(/<[^>]*>/g, "").trim().slice(0, 2000);
@@ -121,10 +121,15 @@ export async function sendDm(memberId: number, toId: number, text: string): Prom
 
 /** Nama+foto member (untuk header percakapan). */
 export async function getMemberLite(id: number): Promise<MemberLite | null> {
-  const r = await queryOne<{ member_id: number; member_name: string | null; member_image: string | null; member_jabatan: string | null }>(
-    `SELECT member_id, member_name, member_image, member_jabatan FROM _member WHERE member_id = ?`, [id],
+  const r = await queryOne<{ member_id: number; member_name: string | null; member_image: string | null; member_jabatan: string | null; group_name: string | null }>(
+    `SELECT member_id, member_name, member_image,
+            COALESCE(NULLIF(btrim(member_kel_jabatan), ''), member_jabatan) AS member_jabatan,
+            g.group_name
+       FROM _member
+       LEFT JOIN _group g ON g.group_id = _member.group_id
+      WHERE member_id = ?`, [id],
   );
-  return r ? { id: r.member_id, name: (r.member_name || "").trim() || "Pengguna", img: avatar(r.member_image), jabatan: r.member_jabatan } : null;
+  return r ? { id: r.member_id, name: (r.member_name || "").trim() || "Pengguna", img: avatar(r.member_image), jabatan: r.member_jabatan, entitas: (r.group_name || "").trim() || null } : null;
 }
 
 /** Cari member untuk memulai chat baru. */
@@ -132,12 +137,16 @@ export async function searchMembers(memberId: number, q: string, limit = 15): Pr
   const term = q.trim();
   if (term.length < 2) return [];
   const like = `%${term}%`;
-  const rows = await query<{ member_id: number; member_name: string | null; member_image: string | null; member_jabatan: string | null }>(
-    `SELECT member_id, member_name, member_image, member_jabatan FROM _member
+  const rows = await query<{ member_id: number; member_name: string | null; member_image: string | null; member_jabatan: string | null; group_name: string | null }>(
+    `SELECT member_id, member_name, member_image,
+            COALESCE(NULLIF(btrim(member_kel_jabatan), ''), member_jabatan) AS member_jabatan,
+            g.group_name
+       FROM _member
+       LEFT JOIN _group g ON g.group_id = _member.group_id
       WHERE member_status = 'active' AND member_id <> ? AND TRIM(COALESCE(member_name,'')) <> ''
         AND (member_name ILIKE ? OR member_nip ILIKE ?)
       ORDER BY member_name LIMIT ?`,
     [memberId, like, like, limit],
   );
-  return rows.map((r) => ({ id: r.member_id, name: (r.member_name || "").trim() || "Pengguna", img: avatar(r.member_image), jabatan: r.member_jabatan }));
+  return rows.map((r) => ({ id: r.member_id, name: (r.member_name || "").trim() || "Pengguna", img: avatar(r.member_image), jabatan: r.member_jabatan, entitas: (r.group_name || "").trim() || null }));
 }

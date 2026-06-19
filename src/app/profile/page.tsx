@@ -121,8 +121,8 @@ export default function ProfilePage() {
                   </div>
                   <div className="pb-1">
                     <h2 className="text-2xl font-bold">{m.name}</h2>
-                    <p className="text-[15px] text-emerald-300">{m.jabatan || "-"}</p>
-                    <p className="text-[13px] text-white/50">{m.kel_jabatan || ""}</p>
+                    <p className="text-[15px] text-emerald-300">{m.kel_jabatan || "-"}</p>
+                    <p className="text-[13px] text-white/50">{m.unit || ""}</p>
                   </div>
                   <span className={`mb-1 ml-auto rounded-full px-3 py-1 text-[12px] font-semibold ${m.status === "active" ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-white/60"}`}>
                     {m.status === "active" ? "Aktif" : m.status || "-"}

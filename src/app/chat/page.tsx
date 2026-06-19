@@ -9,7 +9,7 @@ import { ArrowLeft, Search, Send, X, BellRing, MessageSquarePlus } from "lucide-
 
 interface Conversation { kode: string; friendId: number; friendName: string; friendImg: string | null; lastText: string; lastTgl: string | null; lastFromMe: boolean; unread: number }
 interface Message { id: string; fromMe: boolean; text: string; tgl: string | null }
-interface MemberLite { id: number; name: string; img: string | null; jabatan: string | null }
+interface MemberLite { id: number; name: string; img: string | null; jabatan: string | null; entitas?: string | null }
 
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
 const fmtTime = (s: string | null) => {
@@ -205,6 +205,7 @@ function ChatInner() {
                       <div className="min-w-0">
                         <p className="truncate text-[13.5px] font-semibold">{m.name}</p>
                         {m.jabatan && <p className="truncate text-[12px] text-white/45">{m.jabatan}</p>}
+                        {m.entitas && <p className="truncate text-[11.5px] text-emerald-300/80">{m.entitas}</p>}
                       </div>
                     </button>
                   ))}

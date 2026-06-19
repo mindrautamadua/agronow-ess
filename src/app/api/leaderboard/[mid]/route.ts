@@ -36,7 +36,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ mid: str
 
     // Profil ringkas (hanya data non-sensitif: jabatan, unit, role/level).
     const profile = await queryOne<{ member_name: string | null; member_jabatan: string | null; member_unit_kerja: string | null; lvl: string | null; group_name: string | null }>(
-      `SELECT m.member_name, m.member_jabatan, m.member_unit_kerja, lk.nama AS lvl, g.group_name
+      `SELECT m.member_name,
+              COALESCE(NULLIF(btrim(m.member_kel_jabatan), ''), m.member_jabatan) AS member_jabatan,
+              m.member_unit_kerja, lk.nama AS lvl, g.group_name
          FROM _member m
          LEFT JOIN _member_level_karyawan lk ON lk.id = m.id_level_karyawan
          LEFT JOIN _group g ON g.group_id = m.group_id

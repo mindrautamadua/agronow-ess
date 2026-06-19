@@ -21,7 +21,7 @@ interface Conversation {
   lastText: string; lastTgl: string | null; lastFromMe: boolean; unread: number;
 }
 interface Message { id: string; fromMe: boolean; text: string; tgl: string | null }
-interface MemberLite { id: number; name: string; img: string | null; jabatan: string | null }
+interface MemberLite { id: number; name: string; img: string | null; jabatan: string | null; entitas?: string | null }
 interface ActiveChat { kode: string | null; id: number; name: string; img: string | null; jabatan?: string | null }
 
 const POLL_MS = 5000;
@@ -263,6 +263,7 @@ function NewChatPanel({ onPick, onBack }: { onPick: (p: MemberLite) => void; onB
                   <div className="min-w-0">
                     <p className="truncate text-[14px] font-semibold text-white">{p.name}</p>
                     {p.jabatan && <p className="truncate text-[12px] text-white/45">{p.jabatan}</p>}
+                    {p.entitas && <p className="truncate text-[11.5px] text-emerald-300/80">{p.entitas}</p>}
                   </div>
                 </button>
               </li>

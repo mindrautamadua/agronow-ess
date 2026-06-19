@@ -27,12 +27,23 @@ export const BUCKET_LABEL: Record<BucketKey, string> = {
   experiential: "Belajar dari Pengalaman (Experiential Learning)",
 };
 
+/** Rincian progres JPL per jenis pembelajaran di dalam satu bucket
+ *  (mis. formal → Workshop, Belajar di Kelas, Belajar Mandiri). */
+export interface BucketTypeProgress {
+  key: string;   // kode metode (mb_w, mb_ict, mb_sl, …)
+  label: string; // nama jenis (Workshop, …)
+  earned: number;
+  target: number;
+  pct: number;
+}
+
 export interface BucketProgress {
   key: BucketKey;
   label: string;
   earned: number;
   target: number;
   pct: number;
+  types?: BucketTypeProgress[];
 }
 
 export interface LearningClass {
@@ -78,36 +89,43 @@ export async function getLearningSummary(memberId: number, year = currentYear())
     [memberId],
   );
 
-  const targetRows = await query<{ cat_id: number; kategori: string; target: number }>(
-    `SELECT j.id_kategori AS cat_id, lk.kategori, j.jpl AS target
+  const targetRows = await query<{ cat_id: number; kategori: string; kode: string | null; nama: string | null; target: number }>(
+    `SELECT j.id_kategori AS cat_id, lk.kategori, lk.kode, lk.nama, j.jpl AS target
        FROM _learning_kategori_jpl j
        JOIN _learning_kategori lk ON lk.id = j.id_kategori
       WHERE j.tahun = ?
-        AND lk.kategori IN ('metode_belajar10','metode_belajar20','metode_belajar70')`,
+        AND lk.kategori IN ('metode_belajar10','metode_belajar20','metode_belajar70')
+      ORDER BY j.id_kategori`,
     [year],
   );
 
   const earnedByCat = new Map<number, number>();
   earnedRows.forEach((r) => earnedByCat.set(r.cat_id, Number(r.earned_raw ?? 0)));
 
-  const agg: Record<BucketKey, { earned: number; target: number }> = {
-    formal: { earned: 0, target: 0 },
-    social: { earned: 0, target: 0 },
-    experiential: { earned: 0, target: 0 },
+  const agg: Record<BucketKey, { earned: number; target: number; types: BucketTypeProgress[] }> = {
+    formal: { earned: 0, target: 0, types: [] },
+    social: { earned: 0, target: 0, types: [] },
+    experiential: { earned: 0, target: 0, types: [] },
   };
 
   for (const t of targetRows) {
     const bucket = KATEGORI_TO_BUCKET[t.kategori];
     if (!bucket) continue;
     const target = Number(t.target ?? 0);
-    const earned = Math.min(earnedByCat.get(t.cat_id) ?? 0, target);
+    const earned = Math.min(earnedByCat.get(t.cat_id) ?? 0, target); // di-cap sesuai target (selaras app asli)
     agg[bucket].target += target;
     agg[bucket].earned += earned;
+    agg[bucket].types.push({
+      key: t.kode?.trim() || String(t.cat_id),
+      label: clean(t.nama) || "Lainnya",
+      earned, target,
+      pct: target > 0 ? Math.round((earned / target) * 100) : 0,
+    });
   }
 
   const buckets: BucketProgress[] = (["formal", "social", "experiential"] as BucketKey[]).map((key) => {
-    const { earned, target } = agg[key];
-    return { key, label: BUCKET_LABEL[key], earned, target, pct: target > 0 ? Math.round((earned / target) * 100) : 0 };
+    const { earned, target, types } = agg[key];
+    return { key, label: BUCKET_LABEL[key], earned, target, pct: target > 0 ? Math.round((earned / target) * 100) : 0, types };
   });
 
   const totalEarned = buckets.reduce((s, b) => s + b.earned, 0);

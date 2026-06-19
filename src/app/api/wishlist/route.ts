@@ -1,4 +1,4 @@
-import { query } from "@/lib/db";
+import { query, queryOne } from "@/lib/db";
 import { currentMemberId } from "@/lib/member";
 import { clean } from "@/lib/text";
 
@@ -34,7 +34,7 @@ export async function GET() {
               k.id, k.nama, k.kategori_key_element, k.jpl_total, k.metode, k.deskripsi, k.harga
          FROM _learning_wishlist_v2 w
          JOIN _learning_katalog k ON k.id = w.id_learning_katalog
-        WHERE w.id_member = ?
+        WHERE w.id_member = ? AND COALESCE(w.status, '') <> 'dihapus'
         ORDER BY w.prioritas ASC NULLS LAST, w.id DESC`,
       [id],
     );
@@ -47,11 +47,86 @@ export async function GET() {
     );
 
     return Response.json({
-      wishlist: items.map((r) => ({ ...mapCourse(r), wid: r.wid, tahun: r.tahun, prioritas: r.prioritas })),
+      wishlist: items.map((r) => ({ ...mapCourse(r), wid: r.wid, tahun: r.tahun, prioritas: r.prioritas, status: clean(r.status) || "aktif" })),
       katalog: katalog.map(mapCourse),
     });
   } catch (e) {
     console.error("/api/wishlist", e);
     return Response.json({ error: "Gagal memuat data" }, { status: 500 });
+  }
+}
+
+/**
+ * Tambah pelatihan ke wishlist member. Idempoten: bila sudah ada & `aktif` →
+ * no-op; bila pernah dihapus (`dihapus`) → diaktifkan kembali; selain itu insert
+ * baru. `_learning_wishlist_v2.id` tanpa sequence → MAX+1; prioritas = urutan
+ * terakhir + 1 (ditaruh di akhir). Body: `{ id_learning_katalog }`.
+ */
+export async function POST(req: Request) {
+  const memberId = await currentMemberId();
+  let b: Record<string, unknown>;
+  try { b = await req.json(); } catch { return Response.json({ error: "Permintaan tidak valid" }, { status: 400 }); }
+
+  const katalogId = Number(b.id_learning_katalog) || 0;
+  if (!katalogId) return Response.json({ error: "Pelatihan tidak valid" }, { status: 400 });
+
+  try {
+    const k = await queryOne<{ id: number }>(`SELECT id FROM _learning_katalog WHERE id = ? AND status = 'aktif'`, [katalogId]);
+    if (!k) return Response.json({ error: "Pelatihan tidak ditemukan" }, { status: 404 });
+
+    const year = new Date().getFullYear();
+    const ex = await queryOne<{ id: number; status: string | null }>(
+      `SELECT id, status FROM _learning_wishlist_v2 WHERE id_member = ? AND id_learning_katalog = ? ORDER BY id DESC LIMIT 1`,
+      [String(memberId), katalogId],
+    );
+
+    if (ex && (ex.status ?? "").toLowerCase() === "aktif") {
+      return Response.json({ ok: true, wid: ex.id, already: true });
+    }
+    if (ex) {
+      await query(`UPDATE _learning_wishlist_v2 SET status = 'aktif', tanggal = NOW()::timestamp, tahun = ? WHERE id = ?`, [year, ex.id]);
+      return Response.json({ ok: true, wid: ex.id });
+    }
+
+    const rows = await query<{ id: number }>(
+      `INSERT INTO _learning_wishlist_v2 (id, id_member, id_learning_katalog, tahun, tanggal, prioritas, status)
+       VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM _learning_wishlist_v2), ?, ?, ?, NOW()::timestamp,
+               (SELECT COALESCE(MAX(prioritas), 0) + 1 FROM _learning_wishlist_v2 WHERE id_member = ? AND status = 'aktif'), 'aktif')
+       RETURNING id`,
+      [String(memberId), katalogId, year, String(memberId)],
+    );
+    return Response.json({ ok: true, wid: rows[0]?.id ?? null });
+  } catch (e) {
+    console.error("POST /api/wishlist", e);
+    return Response.json({ error: "Gagal menambah ke wishlist" }, { status: 500 });
+  }
+}
+
+/** Hapus pelatihan dari wishlist (soft delete → status `dihapus`). Body: `{ id_learning_katalog }`. */
+export async function DELETE(req: Request) {
+  const memberId = await currentMemberId();
+  let b: Record<string, unknown>;
+  try { b = await req.json(); } catch { return Response.json({ error: "Permintaan tidak valid" }, { status: 400 }); }
+
+  const katalogId = Number(b.id_learning_katalog) || 0;
+  if (!katalogId) return Response.json({ error: "Pelatihan tidak valid" }, { status: 400 });
+
+  try {
+    // Hanya boleh hapus yang BELUM disetujui (submitted/aktif/pending). Item
+    // yang sudah approved/selesai dilindungi agar riwayat pengajuan tetap utuh.
+    const rows = await query<{ id: number }>(
+      `UPDATE _learning_wishlist_v2 SET status = 'dihapus'
+        WHERE id_member = ? AND id_learning_katalog = ?
+          AND lower(COALESCE(status, '')) NOT IN ('dihapus', 'approved', 'disetujui', 'diterima', 'selesai')
+        RETURNING id`,
+      [String(memberId), katalogId],
+    );
+    if (rows.length === 0) {
+      return Response.json({ error: "Wishlist ini sudah disetujui dan tidak dapat dihapus." }, { status: 409 });
+    }
+    return Response.json({ ok: true });
+  } catch (e) {
+    console.error("DELETE /api/wishlist", e);
+    return Response.json({ error: "Gagal menghapus dari wishlist" }, { status: 500 });
   }
 }

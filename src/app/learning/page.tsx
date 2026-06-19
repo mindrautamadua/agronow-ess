@@ -5,7 +5,8 @@ import { useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import BottomGradient from "@/components/BottomGradient";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
-import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck, X, ExternalLink, ArrowUpRight, FileText, PlayCircle, ChevronRight, Download, Plus, Search, Loader2, UserPlus, CalendarDays } from "lucide-react";
+import LearningCatalog from "@/components/LearningCatalog";
+import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck, X, ExternalLink, ArrowUpRight, FileText, PlayCircle, ChevronRight, ChevronDown, Download, Plus, Search, Loader2, UserPlus, CalendarDays } from "lucide-react";
 
 // Level pembimbing yang boleh membuat Paket Coaching (selaras src/lib/member.ts).
 const COACH_LEVELS = ["BOD-1", "BOD-2"];
@@ -20,7 +21,8 @@ function LinkedinMark({ className }: { className?: string }) {
   );
 }
 
-interface Bucket { key: string; label: string; earned: number; target: number; pct: number }
+interface BucketType { key: string; label: string; earned: number; target: number; pct: number }
+interface Bucket { key: string; label: string; earned: number; target: number; pct: number; types?: BucketType[] }
 interface LClass {
   crm_id: number; name: string; type: string | null; status: string | null;
   bucket: string | null; method: string | null; methodLabel: string | null;
@@ -97,6 +99,7 @@ function LearningInner() {
   // Filter bisa berupa bucket (formal/social/experiential) atau kode metode (mb_*) lewat ?metode=.
   const paramFilter = (p: URLSearchParams) => p.get("metode") || p.get("bucket") || "all";
   const [filter, setFilter] = useState(() => paramFilter(params));
+  const [openType, setOpenType] = useState<string | null>(null);
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState(false);
 
@@ -226,6 +229,70 @@ function LearningInner() {
               )}
             </div>
 
+            {/* Rincian progres JPL per jenis untuk bucket aktif
+                (mis. Formal → Workshop, Belajar di Kelas, Belajar Mandiri). */}
+            {(() => {
+              const bk = data.summary.buckets.find((b) => b.key === filter);
+              if (!bk?.types?.length) return null;
+              const meta = BUCKET_META[bk.key];
+              return (
+                <section className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[15px] font-semibold">Progres JPL per Jenis — {meta?.short ?? bk.label}</p>
+                    <span className="text-[13px] font-bold text-white/70">{bk.earned}/{bk.target} Jam</span>
+                  </div>
+                  <p className="mt-1 text-[12px] text-white/45">Klik jenis untuk melihat pelatihan yang kamu jalani.</p>
+                  <div className="mt-4 space-y-2.5">
+                    {bk.types.map((t) => {
+                      const typeClasses = data.classes.filter((c) => c.method === t.key);
+                      const open = openType === t.key;
+                      return (
+                        <div key={t.key} className="overflow-hidden rounded-xl border border-white/8 bg-white/[0.02]">
+                          <button onClick={() => setOpenType(open ? null : t.key)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-white/[0.03]">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2 text-[13px]">
+                                <span className="font-medium">{t.label} <span className="text-white/40">· {typeClasses.length} pelatihan</span></span>
+                                <span className="text-white/55">{t.earned}/{t.target} JPL · {t.pct}%</span>
+                              </div>
+                              <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-white/10">
+                                <div className={`h-full rounded-full bg-gradient-to-r ${meta?.accent ?? "from-emerald-500 to-green-600"}`} style={{ width: `${Math.min(t.pct, 100)}%` }} />
+                              </div>
+                            </div>
+                            <ChevronDown className={`h-4 w-4 shrink-0 text-white/40 transition-transform ${open ? "rotate-180" : ""}`} />
+                          </button>
+                          {open && (
+                            <div className="border-t border-white/8 px-3.5 py-3">
+                              {typeClasses.length === 0 ? (
+                                <p className="py-1.5 text-center text-[12.5px] text-white/45">Belum ada pelatihan {t.label} yang kamu jalani.</p>
+                              ) : (
+                                <ul className="space-y-2">
+                                  {typeClasses.map((c) => (
+                                    <li key={c.crm_id}>
+                                      <button onClick={() => openDetail(c.crm_id)} className="group flex w-full items-center gap-3 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2 text-left transition-colors hover:border-emerald-500/40 hover:bg-white/[0.04]">
+                                        <div className="min-w-0 flex-1">
+                                          <p className="truncate text-[13px] font-medium group-hover:text-emerald-200">{c.name}</p>
+                                          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px] text-white/50">
+                                            <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> {c.jpl} JPL</span>
+                                            {fmtDate(c.date_start) && <span>{fmtDate(c.date_start)}</span>}
+                                            {c.verified ? <span className="inline-flex items-center gap-1 text-emerald-300"><CheckCircle2 className="h-3 w-3" /> Terverifikasi</span> : <span className="text-white/40">Belum diverifikasi</span>}
+                                          </div>
+                                        </div>
+                                        <ChevronRight className="h-4 w-4 shrink-0 text-white/30 transition-transform group-hover:translate-x-0.5 group-hover:text-white/60" />
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })()}
+
             {/* Belajar Mandiri → LinkedIn Learning */}
             {filter === "mb_sl" && (
               <section className="mt-5 space-y-4">
@@ -279,6 +346,9 @@ function LearningInner() {
                     ))}
                   </div>
                 </div>
+
+                {/* Katalog pelatihan internal kategori Belajar Mandiri */}
+                <LearningCatalog metode="mb_sl" label="Belajar Mandiri" />
               </section>
             )}
 
@@ -316,7 +386,15 @@ function LearningInner() {
               <GuidancePackages tipe={filter === "mb_m" ? "mentor" : "coach"} reload={packagesReload} />
             )}
 
-            {/* Daftar kelas */}
+            {/* Katalog pelatihan internal untuk metode aktif (mb_sl punya katalog
+                sendiri di section LinkedIn, jadi dikecualikan di sini). */}
+            {activeMethod && activeMethod !== "mb_sl" && (
+              <LearningCatalog metode={activeMethod} label={METHOD_LABEL[activeMethod]} />
+            )}
+
+            {/* Daftar kelas — disembunyikan pada tampilan bucket (sudah ada
+                drill-down "Progres JPL per Jenis"); tetap tampil di "Semua" & per-metode. */}
+            {!["formal", "social", "experiential"].includes(filter) && (
             <section className="mt-5 space-y-3">
               {classes.length === 0 && <p className="rounded-xl border border-white/10 bg-white/[0.03] p-6 text-center text-white/50">{filter === "mb_sl" ? "Belum ada aktivitas belajar mandiri tercatat. Mulai dari katalog di atas." : "Belum ada aktivitas pada kategori ini."}</p>}
               {classes.map((c) => {
@@ -348,6 +426,7 @@ function LearningInner() {
                 );
               })}
             </section>
+            )}
           </>
         )}
       </main>

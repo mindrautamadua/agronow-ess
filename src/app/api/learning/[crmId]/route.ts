@@ -1,4 +1,4 @@
-import { getMember } from "@/lib/member";
+import { getMember, UnauthenticatedError } from "@/lib/member";
 import { getClassDetail } from "@/lib/learning";
 
 export const runtime = "nodejs";
@@ -17,6 +17,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ crmId: 
     if (!detail) return Response.json({ error: "Kelas tidak ditemukan" }, { status: 404 });
     return Response.json({ detail });
   } catch (e) {
+    if (e instanceof UnauthenticatedError) {
+      return Response.json({ error: e.message }, { status: 401 });
+    }
     console.error(`/api/learning/${crmId}`, e);
     return Response.json({ error: "Gagal memuat data" }, { status: 500 });
   }

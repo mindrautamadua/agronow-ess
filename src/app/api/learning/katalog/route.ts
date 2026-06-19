@@ -30,18 +30,26 @@ export async function GET(req: Request) {
        AND EXISTS (SELECT 1 FROM _learning_kategori lk
                     WHERE lk.kode = ? AND lk.id IN (k.metode1_id, k.metode2_id, k.metode3_id))`;
 
+    // Nama dinormalisasi (abaikan beda kapital & spasi berlebih) untuk dedup:
+    // katalog dengan nama sama hanya ditampilkan sekali (ambil id terbaru).
+    const normName = `lower(regexp_replace(btrim(k.nama), '\\s+', ' ', 'g'))`;
+
     const rows = await query<Row>(
-      `SELECT k.id, k.nama, k.kategori_key_element, k.jpl_total, k.metode, k.deskripsi,
-              EXISTS (SELECT 1 FROM _learning_wishlist_v2 w
-                       WHERE w.id_member = ? AND w.id_learning_katalog = k.id AND w.status = 'aktif') AS in_wishlist
-         FROM _learning_katalog k
-        WHERE ${where}
-        ORDER BY k.id DESC
-        LIMIT ?`,
+      `SELECT * FROM (
+         SELECT DISTINCT ON (${normName})
+                k.id, k.nama, k.kategori_key_element, k.jpl_total, k.metode, k.deskripsi,
+                EXISTS (SELECT 1 FROM _learning_wishlist_v2 w
+                         WHERE w.id_member = ? AND w.id_learning_katalog = k.id AND w.status = 'aktif') AS in_wishlist
+           FROM _learning_katalog k
+          WHERE ${where}
+          ORDER BY ${normName}, k.id DESC
+       ) d
+       ORDER BY d.id DESC
+       LIMIT ?`,
       [String(memberId), metode, LIMIT],
     );
     const [{ total }] = await query<{ total: number }>(
-      `SELECT COUNT(*)::int AS total FROM _learning_katalog k WHERE ${where}`,
+      `SELECT COUNT(DISTINCT ${normName})::int AS total FROM _learning_katalog k WHERE ${where}`,
       [metode],
     );
 

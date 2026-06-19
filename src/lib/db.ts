@@ -1,9 +1,11 @@
 /**
  * Postgres connection pool untuk Agronow ESS.
  *
- * Sumber data: Supabase Postgres (project `agronow`) — sama dengan agronow-insight,
- * via session pooler (IPv4). Koneksi dari `SUPABASE_DB_URL` di `.env.local`.
- * Pool `pg` disimpan singleton lintas HMR.
+ * Sumber data: Supabase Postgres (project `agronow`) — sama dengan agronow-insight.
+ * Koneksi dari `SUPABASE_DB_URL` di `.env.local`. WAJIB pakai TRANSACTION pooler
+ * (port 6543), BUKAN session pooler (5432): di serverless (Vercel) session pooler
+ * dibatasi ~15 klien & cepat habis → `EMAXCONNSESSION`/timeout → query 500.
+ * Pastikan env di Vercel juga 6543. Pool `pg` disimpan singleton lintas HMR.
  *
  * Catatan dialek: query memakai placeholder gaya `?` (warisan MySQL); `query()`
  * otomatis mengubahnya jadi `$1, $2, …` untuk Postgres.

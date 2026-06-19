@@ -8,10 +8,36 @@ import crypto from "node:crypto";
 import { query, queryOne } from "./db";
 import { getSession } from "./session";
 
+/** Sesi tidak ada / rusak sehingga member tak bisa ditentukan. Route handler
+ *  memetakannya ke HTTP 401 (minta login ulang), bukan 500. */
+export class UnauthenticatedError extends Error {
+  constructor(message = "Sesi tidak valid. Silakan login ulang.") {
+    super(message);
+    this.name = "UnauthenticatedError";
+  }
+}
+
+/** Paksa nilai jadi integer positif, atau null bila tak valid (mis. "", NaN, 0).
+ *  Mencegah string kosong dari sesi rusak lolos ke kolom integer `member_id`
+ *  (Postgres: "invalid input syntax for type integer: \"\"" → query 500). */
+function toMemberId(value: unknown): number | null {
+  const n = typeof value === "number" ? value : Number(String(value ?? "").trim());
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export async function currentMemberId(): Promise<number> {
   const session = await getSession();
-  if (session) return session.memberId;
-  return Number(process.env.CURRENT_MEMBER_ID ?? 6063);
+  if (session) {
+    const id = toMemberId(session.memberId);
+    if (id) return id;
+    // Sesi ada tapi memberId tak valid (cookie legacy/rusak) — jangan biarkan
+    // nilai kosong lolos ke query; minta login ulang.
+    throw new UnauthenticatedError();
+  }
+  // Tanpa sesi: fallback dev (`CURRENT_MEMBER_ID`, default 6063 = M. INDRA).
+  const fallback = toMemberId(process.env.CURRENT_MEMBER_ID ?? 6063);
+  if (fallback) return fallback;
+  throw new UnauthenticatedError("Tidak ada sesi aktif.");
 }
 
 /**

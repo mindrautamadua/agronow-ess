@@ -1,4 +1,4 @@
-import { getMember, getMemberLevel } from "@/lib/member";
+import { getMember, getMemberLevel, UnauthenticatedError } from "@/lib/member";
 import { getLearningSummary, getMemberClasses, getAvailableYears } from "@/lib/learning";
 
 export const runtime = "nodejs";
@@ -27,6 +27,9 @@ export async function GET(req: Request) {
     ]);
     return Response.json({ year, years, summary, classes, member: { name: member.member_name, email: member.member_email, level } });
   } catch (e) {
+    if (e instanceof UnauthenticatedError) {
+      return Response.json({ error: e.message }, { status: 401 });
+    }
     console.error("/api/learning", e);
     const detail = e instanceof Error ? e.message : String(e);
     return Response.json(

@@ -158,6 +158,11 @@ function LearningInner() {
           if (Array.isArray(body.years) && body.years.length) setYears(body.years);
           return;
         }
+        // Sesi tidak valid → arahkan ke login alih-alih menampilkan error.
+        if (status === 401) {
+          window.location.href = "/login";
+          return;
+        }
         // Susun pesan dari respons API; sertakan detail teknis bila ada (dev).
         const msg = body.error || `Permintaan gagal (HTTP ${status}).`;
         setErr(body.detail ? `${msg} — ${body.detail}` : msg);
@@ -289,6 +294,19 @@ function LearningInner() {
                 </span>
               )}
             </div>
+
+            {/* Deskripsi metode aktif (mis. Coaching, Mentoring) dari glossary. */}
+            {activeMethod && GLOSSARY[activeMethod]?.desc && (
+              <section className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[15px] font-semibold">{GLOSSARY[activeMethod].term}</p>
+                  {GLOSSARY[activeMethod].comingSoon && (
+                    <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-medium text-amber-300">Segera hadir</span>
+                  )}
+                </div>
+                <p className="mt-1 text-[13px] leading-relaxed text-white/55">{GLOSSARY[activeMethod].desc}</p>
+              </section>
+            )}
 
             {/* Rincian progres JPL per jenis untuk bucket aktif
                 (mis. Formal → Workshop, Belajar di Kelas, Belajar Mandiri). */}
@@ -451,16 +469,12 @@ function LearningInner() {
               <GuidancePackages tipe={filter === "mb_m" ? "mentor" : "coach"} reload={packagesReload} />
             )}
 
-            {/* Katalog pelatihan internal untuk metode aktif (mb_sl punya katalog
-                sendiri di section LinkedIn, jadi dikecualikan di sini). */}
-            {activeMethod && activeMethod !== "mb_sl" && (
-              <LearningCatalog metode={activeMethod} label={METHOD_LABEL[activeMethod]} />
-            )}
-
-            {/* Daftar kelas — disembunyikan pada tampilan bucket (sudah ada
-                drill-down "Progres JPL per Jenis"); tetap tampil di "Semua" & per-metode. */}
+            {/* Daftar pelatihan yang sudah diikuti — tampil DULU (sebelum katalog);
+                disembunyikan pada tampilan bucket (sudah ada drill-down "Progres
+                JPL per Jenis"); tetap tampil di "Semua" & per-metode. */}
             {!["formal", "social", "experiential"].includes(filter) && (
             <section className="mt-5 space-y-3">
+              <h3 className="flex items-center gap-2 text-[14px] font-semibold text-white/80"><BadgeCheck className="h-4 w-4 text-emerald-400" /> Pelatihan yang Sudah Diikuti</h3>
               {classes.length === 0 && <p className="rounded-xl border border-white/10 bg-white/[0.03] p-6 text-center text-white/50">{filter === "mb_sl" ? "Belum ada aktivitas belajar mandiri tercatat. Mulai dari katalog di atas." : "Belum ada aktivitas pada kategori ini."}</p>}
               {classes.map((c) => {
                 const meta = c.bucket ? BUCKET_META[c.bucket] : null;
@@ -492,6 +506,13 @@ function LearningInner() {
                 );
               })}
             </section>
+            )}
+
+            {/* Katalog pelatihan internal untuk metode aktif — tampil SETELAH
+                daftar pelatihan yang sudah diikuti (mb_sl punya katalog sendiri
+                di section LinkedIn, jadi dikecualikan di sini). */}
+            {activeMethod && activeMethod !== "mb_sl" && (
+              <LearningCatalog metode={activeMethod} label={METHOD_LABEL[activeMethod]} />
             )}
           </>
         )}

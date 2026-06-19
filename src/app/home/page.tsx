@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import NotificationBell from "@/components/NotificationBell";
 import { NAV } from "@/lib/nav";
+import { glossaryFromHref } from "@/lib/glossary";
 import LearningCurve from "@/components/LearningCurve";
 import Leaderboard from "@/components/Leaderboard";
 import {
@@ -165,8 +166,11 @@ function DailyCTA() {
 }
 
 function ZoomImg({ src, alt, href }: { src: string; alt: string; href?: string }) {
+  // Tooltip deskripsi diambil dari glossary terpusat (lib/glossary.ts) lewat href.
+  const entry = href ? glossaryFromHref(href) : undefined;
+  const title = entry ? `${entry.term} — ${entry.desc}` : alt;
   const inner = (
-    <div className="overflow-hidden rounded-[15px] bg-black shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+    <div className="overflow-hidden rounded-[15px] bg-black shadow-[0_10px_30px_rgba(0,0,0,0.3)]" title={title}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt={alt} className="h-full w-full object-cover transition-transform duration-500 hover:scale-110" />
     </div>

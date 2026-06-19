@@ -1,14 +1,25 @@
 /**
  * Logika pembelajaran 70-20-10 untuk Agronow ESS.
  *
- * Pemetaan bucket (lewat `_learning_kategori.kategori`):
+ * SUMBER DATA: `_rekap_classroom_excel` (status_data='publish') — rekap realisasi
+ * pelatihan yang sama dipakai Agronow Insight (/cari-jpl), sehingga pelatihan
+ * EKSTERNAL (mis. LPP, Dayalima) ikut terhitung. Sebelumnya modul ini membaca
+ * dari `_classroom_member`/`_classroom` (hanya kelas LMS internal) sehingga
+ * pelatihan eksternal tak muncul. Baris publish selalu status_verifikasi='ok'
+ * → dianggap terverifikasi. Bila sebuah baris rekap ter-link ke kelas LMS
+ * (`cr_id`), detail modul/nilai/sertifikat tetap diperkaya dari classroom.
+ *
+ * Pemetaan bucket (lewat `_learning_kategori.kategori`, via `rce.kategori`=lk.id):
  *   metode_belajar10 → Formal (10%)
  *   metode_belajar20 → Sosial (20%)
  *   metode_belajar70 → Experiential (70%)
  *
  * Target JPL per kategori per tahun ada di `_learning_kategori_jpl`.
- * "Earned" per kategori = total JPL kelas member yang terverifikasi (is_verified='1'),
- * di-cap maksimal sebesar target kategori (sesuai perilaku aplikasi asli).
+ * Tiap kategori punya DUA angka:
+ *   - earnedReal = total JPL realisasi sebenarnya (tak di-cap) — untuk ditampilkan.
+ *   - earned (diakui) = di-cap ke target kategori; inilah yang dihitung ke progres
+ *     70-20-10 (mis. Belajar di Kelas 59 JPL → hanya 6 yang "diakui"). Home &
+ *     persen capaian memakai angka diakui ini.
  */
 import { query, queryOne } from "./db";
 import { clean } from "./text";
@@ -32,15 +43,17 @@ export const BUCKET_LABEL: Record<BucketKey, string> = {
 export interface BucketTypeProgress {
   key: string;   // kode metode (mb_w, mb_ict, mb_sl, …)
   label: string; // nama jenis (Workshop, …)
-  earned: number;
+  earned: number;     // JPL diakui (di-cap ke target) — dihitung ke progres 70-20-10
+  earnedReal: number; // JPL realisasi sebenarnya (tak di-cap)
   target: number;
-  pct: number;
+  pct: number;        // dari earned diakui → maksimal 100%
 }
 
 export interface BucketProgress {
   key: BucketKey;
   label: string;
-  earned: number;
+  earned: number;     // jumlah JPL diakui (capped)
+  earnedReal: number; // jumlah JPL realisasi (tak di-cap)
   target: number;
   pct: number;
   types?: BucketTypeProgress[];
@@ -56,6 +69,7 @@ export interface LearningClass {
   kategori: string | null;
   method: string | null;
   methodLabel: string | null;
+  penyelenggara: string | null;
   jpl: number;
   date_start: string | null;
   date_end: string | null;
@@ -65,7 +79,7 @@ export interface LearningClass {
 
 export interface LearningSummary {
   year: number;
-  total: { earned: number; target: number; pct: number };
+  total: { earned: number; earnedReal: number; target: number; pct: number };
   buckets: BucketProgress[];
   totalClasses: number;
   certificates: number;
@@ -82,10 +96,9 @@ export async function getAvailableYears(memberId: number): Promise<number[]> {
   const rows = await query<{ tahun: number | null }>(
     `SELECT tahun FROM _learning_kategori_jpl WHERE tahun IS NOT NULL
      UNION
-     SELECT EXTRACT(YEAR FROM c.cr_date_start)::int AS tahun
-       FROM _classroom_member m
-       JOIN _classroom c ON c.cr_id = m.cr_id
-      WHERE m.member_id = ? AND c.cr_date_start IS NOT NULL`,
+     SELECT EXTRACT(YEAR FROM tgl_pelatihan_mulai)::int AS tahun
+       FROM _rekap_classroom_excel
+      WHERE member_id = ? AND status_data = 'publish' AND tgl_pelatihan_mulai IS NOT NULL`,
     [memberId],
   );
   const years = new Set<number>(
@@ -102,15 +115,15 @@ export async function getLearningSummary(memberId: number, year = currentYear())
   const yStart = `${year}-01-01`, yEnd = `${year + 1}-01-01`;
 
   const earnedRows = await query<{ cat_id: number; kategori: string; earned_raw: number | null }>(
-    `SELECT c.id_learning_kategori1 AS cat_id, lk.kategori,
-            SUM(c.jpl_learning_kategori1) FILTER (WHERE m.is_verified = '1') AS earned_raw
-       FROM _classroom_member m
-       JOIN _classroom c ON c.cr_id = m.cr_id
-       JOIN _learning_kategori lk ON lk.id = c.id_learning_kategori1
-      WHERE m.member_id = ?
-        AND c.cr_date_start >= ?::date AND c.cr_date_start < ?::date
+    `SELECT rce.kategori AS cat_id, lk.kategori,
+            SUM(rce.jpl) AS earned_raw
+       FROM _rekap_classroom_excel rce
+       JOIN _learning_kategori lk ON lk.id = rce.kategori
+      WHERE rce.member_id = ?
+        AND rce.status_data = 'publish'
+        AND rce.tgl_pelatihan_mulai >= ?::date AND rce.tgl_pelatihan_mulai < ?::date
         AND lk.kategori IN ('metode_belajar10','metode_belajar20','metode_belajar70')
-      GROUP BY c.id_learning_kategori1, lk.kategori`,
+      GROUP BY rce.kategori, lk.kategori`,
     [memberId, yStart, yEnd],
   );
 
@@ -129,54 +142,62 @@ export async function getLearningSummary(memberId: number, year = currentYear())
   const earnedByCat = new Map<number, number>();
   earnedRows.forEach((r) => earnedByCat.set(r.cat_id, Number(r.earned_raw ?? 0)));
 
-  const agg: Record<BucketKey, { earned: number; target: number; types: BucketTypeProgress[] }> = {
-    formal: { earned: 0, target: 0, types: [] },
-    social: { earned: 0, target: 0, types: [] },
-    experiential: { earned: 0, target: 0, types: [] },
+  const agg: Record<BucketKey, { earned: number; earnedReal: number; target: number; types: BucketTypeProgress[] }> = {
+    formal: { earned: 0, earnedReal: 0, target: 0, types: [] },
+    social: { earned: 0, earnedReal: 0, target: 0, types: [] },
+    experiential: { earned: 0, earnedReal: 0, target: 0, types: [] },
   };
 
   for (const t of targetRows) {
     const bucket = KATEGORI_TO_BUCKET[t.kategori];
     if (!bucket) continue;
     const target = Number(t.target ?? 0);
-    const earnedRaw = earnedByCat.get(t.cat_id) ?? 0;
-    // Cap ke target hanya bila target ada; tanpa target (history) tampilkan apa adanya.
-    const earned = target > 0 ? Math.min(earnedRaw, target) : earnedRaw;
+    const earnedReal = earnedByCat.get(t.cat_id) ?? 0;
+    // "Diakui" = di-cap ke target (mis. 59 → 6). Realisasi sebenarnya tetap di
+    // earnedReal untuk ditampilkan. pct & progres pakai angka diakui (≤ 100%).
+    const earned = target > 0 ? Math.min(earnedReal, target) : earnedReal;
     agg[bucket].target += target;
     agg[bucket].earned += earned;
+    agg[bucket].earnedReal += earnedReal;
     agg[bucket].types.push({
       key: t.kode?.trim() || String(t.cat_id),
       label: clean(t.nama) || "Lainnya",
-      earned, target,
+      earned, earnedReal, target,
       pct: target > 0 ? Math.round((earned / target) * 100) : 0,
     });
   }
 
   const buckets: BucketProgress[] = (["formal", "social", "experiential"] as BucketKey[]).map((key) => {
-    const { earned, target, types } = agg[key];
-    return { key, label: BUCKET_LABEL[key], earned, target, pct: target > 0 ? Math.round((earned / target) * 100) : 0, types };
+    const { earned, earnedReal, target, types } = agg[key];
+    return { key, label: BUCKET_LABEL[key], earned, earnedReal, target, pct: target > 0 ? Math.round((earned / target) * 100) : 0, types };
   });
 
   const totalEarned = buckets.reduce((s, b) => s + b.earned, 0);
+  const totalEarnedReal = buckets.reduce((s, b) => s + b.earnedReal, 0);
   const totalTarget = buckets.reduce((s, b) => s + b.target, 0);
 
   const [{ n: totalClasses } = { n: 0 }] = await query<{ n: number }>(
-    `SELECT COUNT(*)::int AS n FROM _classroom_member m
-       JOIN _classroom c ON c.cr_id = m.cr_id
-      WHERE m.member_id = ? AND c.cr_date_start >= ?::date AND c.cr_date_start < ?::date`,
+    `SELECT COUNT(*)::int AS n FROM _rekap_classroom_excel
+      WHERE member_id = ? AND status_data = 'publish'
+        AND tgl_pelatihan_mulai >= ?::date AND tgl_pelatihan_mulai < ?::date`,
     [memberId, yStart, yEnd],
   );
+  // Sertifikat: rekap eksternal tak menyimpan sertifikat; hitung dari kelas LMS
+  // yang ter-link (cr_id) dan punya berkas sertifikat.
   const [{ n: certificates } = { n: 0 }] = await query<{ n: number }>(
-    `SELECT COUNT(*)::int AS n FROM _classroom_member m
-       JOIN _classroom c ON c.cr_id = m.cr_id
-      WHERE m.member_id = ? AND m.berkas_sertifikat IS NOT NULL AND m.berkas_sertifikat <> ''
-        AND c.cr_date_start >= ?::date AND c.cr_date_start < ?::date`,
+    `SELECT COUNT(*)::int AS n FROM _rekap_classroom_excel rce
+      WHERE rce.member_id = ? AND rce.status_data = 'publish'
+        AND rce.tgl_pelatihan_mulai >= ?::date AND rce.tgl_pelatihan_mulai < ?::date
+        AND rce.cr_id IS NOT NULL AND rce.cr_id > 0
+        AND EXISTS (SELECT 1 FROM _classroom_member cm
+                     WHERE cm.cr_id = rce.cr_id AND cm.member_id = rce.member_id
+                       AND cm.berkas_sertifikat IS NOT NULL AND cm.berkas_sertifikat <> '')`,
     [memberId, yStart, yEnd],
   );
 
   return {
     year,
-    total: { earned: totalEarned, target: totalTarget, pct: totalTarget > 0 ? Math.round((totalEarned / totalTarget) * 100) : 0 },
+    total: { earned: totalEarned, earnedReal: totalEarnedReal, target: totalTarget, pct: totalTarget > 0 ? Math.round((totalEarned / totalTarget) * 100) : 0 },
     buckets,
     totalClasses: Number(totalClasses),
     certificates: Number(certificates),
@@ -201,6 +222,7 @@ export interface ClassDetail {
   scorePost: number | null;
   jpl: number;
   methodLabel: string | null;
+  penyelenggara: string | null;
   date_start: string | null;
   date_end: string | null;
   verified: boolean;
@@ -215,25 +237,32 @@ function materiUrl(media: string | null | undefined): string | null {
   return MATERI_DOC_BASE ? `${MATERI_DOC_BASE}/${m}` : null;
 }
 
-/** Detail satu kelas member: deskripsi, daftar modul + materi, dan sertifikat. */
-export async function getClassDetail(memberId: number, crmId: number): Promise<ClassDetail | null> {
+interface ClassroomExtras {
+  desc: string | null;
+  moduleDesc: string | null;
+  modules: ClassModule[];
+  certificate: string | null;
+  scorePre: number | null;
+  scorePost: number | null;
+  has_certificate: boolean;
+}
+
+/** Modul + nilai + sertifikat dari kelas LMS (`_classroom`/`_classroom_member`)
+ *  untuk baris rekap yang ter-link via `cr_id`. Null bila kelas tak ditemukan. */
+async function getClassroomExtras(memberId: number, crId: number): Promise<ClassroomExtras | null> {
   const row = await queryOne<{
-    crm_id: number; cr_name: string; cr_desc: string | null; cr_module: string | null;
+    cr_desc: string | null; cr_module: string | null;
     berkas_sertifikat: string | null; cr_has_certificate: number | null;
     nilai_pre_test: number | null; nilai_post_test: number | null;
-    metode_nama: string | null; jpl: number | null;
-    cr_date_start: string | null; cr_date_end: string | null; is_verified: string | null;
   }>(
-    `SELECT m.crm_id, c.cr_name, c.cr_desc, c.cr_module,
-            m.berkas_sertifikat, c.cr_has_certificate,
-            m.nilai_pre_test, m.nilai_post_test, m.is_verified,
-            lk.nama AS metode_nama, c.jpl_learning_kategori1 AS jpl,
-            c.cr_date_start, c.cr_date_end
+    `SELECT c.cr_desc, c.cr_module, m.berkas_sertifikat, c.cr_has_certificate,
+            m.nilai_pre_test, m.nilai_post_test
        FROM _classroom_member m
        JOIN _classroom c ON c.cr_id = m.cr_id
-       LEFT JOIN _learning_kategori lk ON lk.id = c.id_learning_kategori1
-      WHERE m.crm_id = ? AND m.member_id = ?`,
-    [crmId, memberId],
+      WHERE c.cr_id = ? AND m.member_id = ?
+      ORDER BY m.crm_id DESC
+      LIMIT 1`,
+    [crId, memberId],
   );
   if (!row) return null;
 
@@ -262,64 +291,111 @@ export async function getClassDetail(memberId: number, crmId: number): Promise<C
   } catch { /* cr_module bukan JSON valid → abaikan */ }
 
   const cert = (row.berkas_sertifikat ?? "").trim();
-
   return {
-    crm_id: row.crm_id,
-    name: clean(row.cr_name),
     desc: clean(row.cr_desc) || null,
     moduleDesc,
     modules,
     certificate: cert || null,
     scorePre: row.nilai_pre_test == null ? null : Number(row.nilai_pre_test),
     scorePost: row.nilai_post_test == null ? null : Number(row.nilai_post_test),
-    jpl: Number(row.jpl ?? 0),
-    methodLabel: row.metode_nama ? clean(row.metode_nama) : null,
-    date_start: row.cr_date_start,
-    date_end: row.cr_date_end,
-    verified: row.is_verified === "1",
     has_certificate: !!cert || row.cr_has_certificate === 1,
   };
 }
 
-/** Daftar kelas/aktivitas pembelajaran member (terbaru dulu).
- *  Bila `year` diberikan, hanya kelas dengan `cr_date_start` di tahun itu. */
+/** Detail satu pelatihan member (dari rekap; `id` = `_rekap_classroom_excel.id`).
+ *  Bila rekap ter-link ke kelas LMS (`cr_id`), diperkaya modul/nilai/sertifikat. */
+export async function getClassDetail(memberId: number, rekapId: number): Promise<ClassDetail | null> {
+  const row = await queryOne<{
+    rid: number; cr_id: number | null; name: string;
+    jpl: number | null; date_start: string | null; date_end: string | null;
+    penyelenggara: string | null; keterangan: string | null; metode_nama: string | null;
+  }>(
+    `SELECT rce.id AS rid, rce.cr_id, rce.nama_pelatihan AS name,
+            rce.jpl, rce.tgl_pelatihan_mulai::date AS date_start,
+            rce.tgl_pelatihan_selesai::date AS date_end,
+            rce.penyelenggara, rce.keterangan, lk.nama AS metode_nama
+       FROM _rekap_classroom_excel rce
+       LEFT JOIN _learning_kategori lk ON lk.id = rce.kategori
+      WHERE rce.id = ? AND rce.member_id = ? AND rce.status_data = 'publish'`,
+    [rekapId, memberId],
+  );
+  if (!row) return null;
+
+  const detail: ClassDetail = {
+    crm_id: row.rid,
+    name: clean(row.name),
+    desc: clean(row.keterangan) || null,
+    moduleDesc: null,
+    modules: [],
+    certificate: null,
+    scorePre: null,
+    scorePost: null,
+    jpl: Number(row.jpl ?? 0),
+    methodLabel: row.metode_nama ? clean(row.metode_nama) : null,
+    penyelenggara: clean(row.penyelenggara) || null,
+    date_start: row.date_start,
+    date_end: row.date_end,
+    verified: true, // baris publish selalu terverifikasi (status_verifikasi='ok')
+    has_certificate: false,
+  };
+
+  if (row.cr_id && row.cr_id > 0) {
+    const extra = await getClassroomExtras(memberId, row.cr_id);
+    if (extra) {
+      detail.desc = detail.desc || extra.desc;
+      detail.moduleDesc = extra.moduleDesc;
+      detail.modules = extra.modules;
+      detail.certificate = extra.certificate;
+      detail.scorePre = extra.scorePre;
+      detail.scorePost = extra.scorePost;
+      detail.has_certificate = extra.has_certificate;
+    }
+  }
+  return detail;
+}
+
+/** Daftar pelatihan member dari rekap realisasi (terbaru dulu).
+ *  Bila `year` diberikan, hanya pelatihan dengan `tgl_pelatihan_mulai` di tahun itu. */
 export async function getMemberClasses(memberId: number, year?: number): Promise<LearningClass[]> {
-  const yearFilter = year ? "AND c.cr_date_start >= ?::date AND c.cr_date_start < ?::date" : "";
+  const yearFilter = year ? "AND rce.tgl_pelatihan_mulai >= ?::date AND rce.tgl_pelatihan_mulai < ?::date" : "";
   const yearParams: unknown[] = year ? [`${year}-01-01`, `${year + 1}-01-01`] : [];
   const rows = await query<{
-    crm_id: number; cr_id: number; cr_name: string; cr_type: string | null; cr_status: string | null;
-    cr_date_start: string | null; cr_date_end: string | null; cr_has_certificate: number | null;
-    is_verified: string | null; has_cert: boolean; kategori: string | null;
-    metode_kode: string | null; metode_nama: string | null; jpl: number | null;
+    rid: number; cr_id: number | null; name: string;
+    date_start: string | null; date_end: string | null; has_cert: boolean;
+    kategori: string | null; metode_kode: string | null; metode_nama: string | null;
+    penyelenggara: string | null; jpl: number | null;
   }>(
-    `SELECT m.crm_id, c.cr_id, c.cr_name, c.cr_type, c.cr_status,
-            c.cr_date_start, c.cr_date_end, c.cr_has_certificate,
-            m.is_verified,
-            (m.berkas_sertifikat IS NOT NULL AND m.berkas_sertifikat <> '') AS has_cert,
+    `SELECT rce.id AS rid, rce.cr_id, rce.nama_pelatihan AS name,
+            rce.tgl_pelatihan_mulai::date AS date_start,
+            rce.tgl_pelatihan_selesai::date AS date_end,
+            (rce.cr_id IS NOT NULL AND rce.cr_id > 0 AND EXISTS (
+               SELECT 1 FROM _classroom_member cm
+                WHERE cm.cr_id = rce.cr_id AND cm.member_id = rce.member_id
+                  AND cm.berkas_sertifikat IS NOT NULL AND cm.berkas_sertifikat <> '')) AS has_cert,
             lk.kategori, lk.kode AS metode_kode, lk.nama AS metode_nama,
-            c.jpl_learning_kategori1 AS jpl
-       FROM _classroom_member m
-       JOIN _classroom c ON c.cr_id = m.cr_id
-       LEFT JOIN _learning_kategori lk ON lk.id = c.id_learning_kategori1
-      WHERE m.member_id = ? ${yearFilter}
-      ORDER BY c.cr_date_start DESC NULLS LAST`,
+            rce.penyelenggara, rce.jpl
+       FROM _rekap_classroom_excel rce
+       LEFT JOIN _learning_kategori lk ON lk.id = rce.kategori
+      WHERE rce.member_id = ? AND rce.status_data = 'publish' ${yearFilter}
+      ORDER BY rce.tgl_pelatihan_mulai DESC NULLS LAST`,
     [memberId, ...yearParams],
   );
 
   return rows.map((r) => ({
-    crm_id: r.crm_id,
-    cr_id: r.cr_id,
-    name: clean(r.cr_name),
-    type: r.cr_type,
-    status: r.cr_status,
+    crm_id: r.rid,
+    cr_id: r.cr_id ?? 0,
+    name: clean(r.name),
+    type: null,
+    status: null,
     bucket: r.kategori ? KATEGORI_TO_BUCKET[r.kategori] ?? null : null,
     kategori: r.kategori,
     method: r.metode_kode,
     methodLabel: r.metode_nama ? clean(r.metode_nama) : null,
+    penyelenggara: clean(r.penyelenggara) || null,
     jpl: Number(r.jpl ?? 0),
-    date_start: r.cr_date_start,
-    date_end: r.cr_date_end,
-    verified: r.is_verified === "1",
-    has_certificate: r.has_cert || r.cr_has_certificate === 1,
+    date_start: r.date_start,
+    date_end: r.date_end,
+    verified: true, // baris publish selalu terverifikasi (status_verifikasi='ok')
+    has_certificate: r.has_cert,
   }));
 }

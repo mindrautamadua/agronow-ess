@@ -3,6 +3,15 @@
 import AppHeader from "@/components/AppHeader";
 import BottomGradient from "@/components/BottomGradient";
 import { GraduationCap, Users, Briefcase, Target, Heart, BarChart3 } from "lucide-react";
+import { GLOSSARY } from "@/lib/glossary";
+
+// Daftar istilah dikelompokkan; tiap kunci mengacu ke entri di lib/glossary.ts.
+const GLOSSARY_GROUPS: { title: string; keys: string[] }[] = [
+  { title: "Kerangka 70 · 20 · 10", keys: ["formal", "social", "experiential"] },
+  { title: "Metode Pembelajaran", keys: ["mb_ict", "mb_sl", "mb_w", "mb_c", "mb_m", "mb_b", "mb_lo", "mb_pa", "mb_ib"] },
+  { title: "Insight Hub", keys: ["webinar", "direksi", "berita", "diskusi", "library", "article", "chatroom", "short-movie", "vlog"] },
+  { title: "Program Lain", keys: ["wishlist", "idp", "agrowallet"] },
+];
 
 const STEPS = [
   { icon: BarChart3, title: "1. Pantau Progres", desc: "Lihat capaian belajarmu pada panel Progres Pembelajaran di halaman utama — total jam dan rincian 70 · 20 · 10." },
@@ -38,6 +47,34 @@ export default function PanduanPage() {
             );
           })}
         </div>
+
+        {/* Daftar istilah — sumber: lib/glossary.ts */}
+        <section className="mt-10">
+          <h2 className="text-xl font-bold sm:text-2xl">Daftar Istilah</h2>
+          <p className="mt-1 max-w-3xl text-[14px] text-white/60">Pengertian metode dan program pembelajaran yang tersedia di Agronow.</p>
+          <div className="mt-5 space-y-6">
+            {GLOSSARY_GROUPS.map((g) => (
+              <div key={g.title}>
+                <h3 className="text-[13px] font-semibold uppercase tracking-wide text-emerald-300/90">{g.title}</h3>
+                <dl className="mt-2 grid gap-3 sm:grid-cols-2">
+                  {g.keys.map((k) => {
+                    const e = GLOSSARY[k];
+                    if (!e) return null;
+                    return (
+                      <div key={k} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                        <dt className="text-[14px] font-bold">
+                          {e.term}
+                          {e.comingSoon && <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">Coming soon</span>}
+                        </dt>
+                        <dd className="mt-1 text-[12.5px] leading-relaxed text-white/60">{e.desc}</dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <div className="mt-7 rounded-2xl border border-white/10 bg-gradient-to-br from-[#1f3d12] to-[#0c1f08] p-6">
           <h2 className="text-lg font-bold">Butuh bantuan lebih lanjut?</h2>

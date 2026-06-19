@@ -28,7 +28,8 @@ export default function KompetensiPage() {
   }, []);
 
   const radarData = useMemo(
-    () => (data?.axes ?? []).map((a) => ({ short: a.short, pct: a.pct, target: 100, name: a.name, earned: a.earned, targetJpl: a.target })),
+    // pctR = pct di-clamp 100 untuk plot radar (domain 0–100); pct asli (bisa >100) tetap dipakai di tooltip.
+    () => (data?.axes ?? []).map((a) => ({ short: a.short, pct: a.pct, pctR: Math.min(a.pct, 100), target: 100, name: a.name, earned: a.earned, targetJpl: a.target })),
     [data],
   );
   const gaps = useMemo(() => (data?.axes ?? []).filter((a) => a.remaining > 0).sort((a, b) => b.remaining - a.remaining), [data]);
@@ -88,7 +89,7 @@ export default function KompetensiPage() {
                   <PolarAngleAxis dataKey="short" tick={{ fill: "rgba(255,255,255,0.7)", fontSize: 11 }} />
                   <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
                   <Radar name="Target" dataKey="target" stroke="rgba(255,255,255,0.35)" strokeDasharray="4 4" fill="none" />
-                  <Radar name="Capaian" dataKey="pct" stroke="#34d399" strokeWidth={2} fill="#34d399" fillOpacity={0.35} />
+                  <Radar name="Capaian" dataKey="pctR" stroke="#34d399" strokeWidth={2} fill="#34d399" fillOpacity={0.35} />
                   <Tooltip content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload as { name: string; pct: number; earned: number; targetJpl: number };
@@ -142,7 +143,7 @@ export default function KompetensiPage() {
                       <span className="shrink-0 text-[12px] text-white/60 tabular-nums">{a.earned}/{a.target} JPL</span>
                     </div>
                     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/30">
-                      <div className="h-full rounded-full" style={{ width: `${a.pct}%`, background: BUCKET_COLOR[a.bucket] }} />
+                      <div className="h-full rounded-full" style={{ width: `${Math.min(a.pct, 100)}%`, background: BUCKET_COLOR[a.bucket] }} />
                     </div>
                   </div>
                   <span className="shrink-0 rounded-full bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-200 tabular-nums">

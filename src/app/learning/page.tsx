@@ -6,6 +6,7 @@ import AppHeader from "@/components/AppHeader";
 import BottomGradient from "@/components/BottomGradient";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
 import LearningCatalog from "@/components/LearningCatalog";
+import { GLOSSARY } from "@/lib/glossary";
 import { GraduationCap, Users, Briefcase, CheckCircle2, Award, Clock, BadgeCheck, X, ExternalLink, ArrowUpRight, FileText, PlayCircle, ChevronRight, ChevronDown, Download, Plus, Search, Loader2, UserPlus, CalendarDays } from "lucide-react";
 
 // Level pembimbing yang boleh membuat Paket Coaching (selaras src/lib/member.ts).
@@ -21,16 +22,17 @@ function LinkedinMark({ className }: { className?: string }) {
   );
 }
 
-interface BucketType { key: string; label: string; earned: number; target: number; pct: number }
-interface Bucket { key: string; label: string; earned: number; target: number; pct: number; types?: BucketType[] }
+interface BucketType { key: string; label: string; earned: number; earnedReal: number; target: number; pct: number }
+interface Bucket { key: string; label: string; earned: number; earnedReal: number; target: number; pct: number; types?: BucketType[] }
 interface LClass {
   crm_id: number; name: string; type: string | null; status: string | null;
   bucket: string | null; method: string | null; methodLabel: string | null;
+  penyelenggara: string | null;
   jpl: number; date_start: string | null; date_end: string | null;
   verified: boolean; has_certificate: boolean;
 }
 interface Data {
-  summary: { total: { earned: number; target: number; pct: number }; buckets: Bucket[]; totalClasses: number; certificates: number };
+  summary: { total: { earned: number; earnedReal: number; target: number; pct: number }; buckets: Bucket[]; totalClasses: number; certificates: number };
   classes: LClass[];
   member?: { name: string | null; email: string | null; level?: string | null };
 }
@@ -39,7 +41,7 @@ interface ClassModule { name: string; start: string | null; end: string | null; 
 interface ClassDetail {
   crm_id: number; name: string; desc: string | null; moduleDesc: string | null;
   modules: ClassModule[]; certificate: string | null; scorePre: number | null; scorePost: number | null;
-  jpl: number; methodLabel: string | null; date_start: string | null; date_end: string | null;
+  jpl: number; methodLabel: string | null; penyelenggara: string | null; date_start: string | null; date_end: string | null;
   verified: boolean; has_certificate: boolean;
 }
 
@@ -82,6 +84,13 @@ const fmtDate = (s: string | null) => {
 // tampilkan capaian saja tanpa "/0" yang membingungkan.
 const progressLabel = (earned: number, target: number, unit: string) =>
   target > 0 ? `${earned}/${target} ${unit}` : `${earned} ${unit}`;
+
+// Label capaian: tampilkan JPL realisasi sebenarnya + berapa yang "diakui"
+// (di-cap ke target). Bila tak ada kelebihan, cukup tampilkan "diakui/target".
+const recognizedLabel = (earned: number, earnedReal: number, target: number, unit: string) =>
+  target > 0 && earnedReal > earned
+    ? `${earnedReal} ${unit} · diakui ${earned}/${target}`
+    : progressLabel(earned, target, unit);
 
 // Format "tanggal jam" sesi paket (timestamp dari DB, mis. "2026-07-01 09:00:00").
 const fmtDateTime = (s: string | null) => {
@@ -239,11 +248,11 @@ function LearningInner() {
                   <div key={b.key} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                     <div className="flex items-center justify-between">
                       <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${meta.accent}`}><Icon className="h-5 w-5" /></div>
-                      <span className="text-sm font-bold text-white/70">{progressLabel(b.earned, b.target, "Jam")}</span>
+                      <span className="text-sm font-bold text-white/70">{recognizedLabel(b.earned, b.earnedReal, b.target, "Jam")}</span>
                     </div>
                     <p className="mt-4 text-[15px] font-semibold">{meta.short}</p>
                     <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/10">
-                      <div className={`h-full rounded-full bg-gradient-to-r ${meta.accent}`} style={{ width: `${b.pct}%` }} />
+                      <div className={`h-full rounded-full bg-gradient-to-r ${meta.accent}`} style={{ width: `${Math.min(b.pct, 100)}%` }} />
                     </div>
                     <p className="mt-1.5 text-right text-[12px] font-medium text-white/50">{b.pct}%</p>
                   </div>
@@ -254,7 +263,7 @@ function LearningInner() {
             <div className="mt-4 flex flex-wrap items-center gap-3 text-[13px] text-white/60">
               <span className="inline-flex items-center gap-1.5"><BadgeCheck className="h-4 w-4 text-emerald-400" /> {data.summary.totalClasses} kelas</span>
               <span className="inline-flex items-center gap-1.5"><Award className="h-4 w-4 text-amber-400" /> {data.summary.certificates} sertifikat</span>
-              <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4 text-sky-400" /> Total {progressLabel(data.summary.total.earned, data.summary.total.target, "Jam")}{data.summary.total.target > 0 ? ` (${data.summary.total.pct}%)` : ""}</span>
+              <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4 text-sky-400" /> Total {recognizedLabel(data.summary.total.earned, data.summary.total.earnedReal, data.summary.total.target, "Jam")}{data.summary.total.target > 0 ? ` (${data.summary.total.pct}%)` : ""}</span>
             </div>
 
             {/* Tabs */}
@@ -288,7 +297,7 @@ function LearningInner() {
                 <section className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[15px] font-semibold">Progres JPL per Jenis — {meta?.short ?? bk.label}</p>
-                    <span className="text-[13px] font-bold text-white/70">{progressLabel(bk.earned, bk.target, "Jam")}</span>
+                    <span className="text-[13px] font-bold text-white/70">{recognizedLabel(bk.earned, bk.earnedReal, bk.target, "Jam")}</span>
                   </div>
                   <p className="mt-1 text-[12px] text-white/45">Klik jenis untuk melihat pelatihan yang kamu jalani.</p>
                   <div className="mt-4 space-y-2.5">
@@ -301,7 +310,7 @@ function LearningInner() {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-2 text-[13px]">
                                 <span className="font-medium">{t.label} <span className="text-white/40">· {typeClasses.length} pelatihan</span></span>
-                                <span className="text-white/55">{progressLabel(t.earned, t.target, "JPL")}{t.target > 0 ? ` · ${t.pct}%` : ""}</span>
+                                <span className="text-white/55">{recognizedLabel(t.earned, t.earnedReal, t.target, "JPL")}{t.target > 0 ? ` · ${t.pct}%` : ""}</span>
                               </div>
                               <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-white/10">
                                 <div className={`h-full rounded-full bg-gradient-to-r ${meta?.accent ?? "from-emerald-500 to-green-600"}`} style={{ width: `${Math.min(t.pct, 100)}%` }} />
@@ -311,6 +320,9 @@ function LearningInner() {
                           </button>
                           {open && (
                             <div className="border-t border-white/8 px-3.5 py-3">
+                              {GLOSSARY[t.key]?.desc && (
+                                <p className="mb-3 text-[12.5px] leading-relaxed text-white/55">{GLOSSARY[t.key].desc}</p>
+                              )}
                               {typeClasses.length === 0 ? (
                                 <p className="py-1.5 text-center text-[12.5px] text-white/45">Belum ada pelatihan {t.label} yang kamu jalani.</p>
                               ) : (
@@ -322,6 +334,7 @@ function LearningInner() {
                                           <p className="truncate text-[13px] font-medium group-hover:text-emerald-200">{c.name}</p>
                                           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px] text-white/50">
                                             <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> {c.jpl} JPL</span>
+                                            {c.penyelenggara && <span>{c.penyelenggara}</span>}
                                             {fmtDate(c.date_start) && <span>{fmtDate(c.date_start)}</span>}
                                             {c.verified ? <span className="inline-flex items-center gap-1 text-emerald-300"><CheckCircle2 className="h-3 w-3" /> Terverifikasi</span> : <span className="text-white/40">Belum diverifikasi</span>}
                                           </div>
@@ -461,6 +474,7 @@ function LearningInner() {
                       <p className="text-[15px] font-semibold leading-snug group-hover:text-emerald-200">{c.name}</p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-white/55">
                         <span>{c.methodLabel ?? meta?.short ?? "Lainnya"}</span>
+                        {c.penyelenggara && <span className="inline-flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> {c.penyelenggara}</span>}
                         <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {c.jpl} JPL</span>
                         {fmtDate(c.date_start) && <span>{fmtDate(c.date_start)}{fmtDate(c.date_end) ? ` – ${fmtDate(c.date_end)}` : ""}</span>}
                       </div>
@@ -885,6 +899,7 @@ function ClassDetailModal({ loading, err, detail, onClose }: { loading: boolean;
             {detail && (
               <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-white/45">
                 {detail.methodLabel && <span>{detail.methodLabel}</span>}
+                {detail.penyelenggara && <span className="inline-flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> {detail.penyelenggara}</span>}
                 <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {detail.jpl} JPL</span>
                 {fmtDate(detail.date_start) && <span>{fmtDate(detail.date_start)}{fmtDate(detail.date_end) ? ` – ${fmtDate(detail.date_end)}` : ""}</span>}
               </p>

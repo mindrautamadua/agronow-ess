@@ -65,14 +65,16 @@ export async function getSkillGap(memberId: number, year = currentYear()): Promi
     [year],
   );
 
-  // JPL terverifikasi per metode untuk member ini.
+  // JPL realisasi per metode untuk member ini (sumber: rekap `_rekap_classroom_excel`,
+  // selaras dengan halaman /learning — termasuk pelatihan eksternal). Baris publish
+  // dianggap terverifikasi (status_verifikasi selalu 'ok').
   const earnedRows = await query<{ cat_id: number; earned: number | null }>(
-    `SELECT c.id_learning_kategori1 AS cat_id,
-            SUM(c.jpl_learning_kategori1) FILTER (WHERE m.is_verified = '1') AS earned
-       FROM _classroom_member m
-       JOIN _classroom c ON c.cr_id = m.cr_id
-      WHERE m.member_id = ?
-      GROUP BY c.id_learning_kategori1`,
+    `SELECT rce.kategori AS cat_id,
+            SUM(rce.jpl) AS earned
+       FROM _rekap_classroom_excel rce
+      WHERE rce.member_id = ?
+        AND rce.status_data = 'publish'
+      GROUP BY rce.kategori`,
     [memberId],
   );
   const earnedByCat = new Map<number, number>();
@@ -82,7 +84,7 @@ export async function getSkillGap(memberId: number, year = currentYear()): Promi
     const bucket = KATEGORI_TO_BUCKET[t.bucket_key] ?? "formal";
     const target = Number(t.target);
     const earnedRaw = earnedByCat.get(t.cat_id) ?? 0;
-    const earned = Math.min(earnedRaw, target); // cap (sesuai perilaku app asli)
+    const earned = Math.min(earnedRaw, target); // "diakui" = di-cap ke target; sisa pakai earnedRaw
     return {
       catId: t.cat_id, name: clean(t.nama), short: SHORT_METHOD[t.kode] ?? clean(t.nama), kode: t.kode,
       bucket, bucketLabel: BUCKET_LABEL[bucket],
@@ -92,13 +94,17 @@ export async function getSkillGap(memberId: number, year = currentYear()): Promi
   });
 
   // Ringkasan per bucket 70-20-10.
-  const bAgg: Record<BucketKey, { earned: number; target: number }> = {
-    formal: { earned: 0, target: 0 }, social: { earned: 0, target: 0 }, experiential: { earned: 0, target: 0 },
+  const bAgg: Record<BucketKey, { earned: number; earnedReal: number; target: number }> = {
+    formal: { earned: 0, earnedReal: 0, target: 0 }, social: { earned: 0, earnedReal: 0, target: 0 }, experiential: { earned: 0, earnedReal: 0, target: 0 },
   };
-  axes.forEach((a) => { bAgg[a.bucket].earned += a.earned; bAgg[a.bucket].target += a.target; });
+  axes.forEach((a) => {
+    bAgg[a.bucket].earned += a.earned;
+    bAgg[a.bucket].earnedReal += earnedByCat.get(a.catId) ?? 0;
+    bAgg[a.bucket].target += a.target;
+  });
   const buckets: BucketProgress[] = (["formal", "social", "experiential"] as BucketKey[]).map((key) => {
-    const { earned, target } = bAgg[key];
-    return { key, label: BUCKET_LABEL[key], earned, target, pct: target > 0 ? Math.round((earned / target) * 100) : 0 };
+    const { earned, earnedReal, target } = bAgg[key];
+    return { key, label: BUCKET_LABEL[key], earned, earnedReal, target, pct: target > 0 ? Math.round((earned / target) * 100) : 0 };
   });
 
   const total = {

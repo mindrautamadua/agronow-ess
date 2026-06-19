@@ -10,7 +10,7 @@ import LearningCurve from "@/components/LearningCurve";
 import Leaderboard from "@/components/Leaderboard";
 import {
   Menu, ChevronDown, ChevronLeft, ChevronRight, ExternalLink,
-  Wallet, FileText, ArrowUpRight, Flame, ArrowRight, Sparkles,
+  Wallet, FileText, ArrowUpRight, Flame, ArrowRight, Sparkles, Play,
 } from "lucide-react";
 
 // ── Tipe data dari /api/me ──
@@ -103,6 +103,18 @@ const INSIGHT = [
   { src: "/img/short-movie.jpg", label: "Short Movie", href: "/insight-hub/short-movie" },
   { src: "/img/vlog.jpg", label: "Vlog", href: "/insight-hub/vlog" },
   { src: "/img/SOP_banner_no_ornament.png", label: "SOP", href: "https://onehub.ptpn.id" },
+];
+
+// Game yang masih digarap — konsep orisinal bertema agro/L&D (bukan game
+// ber-hak-cipta). Ilustrasi tiap kartu digambar sebagai SVG vektor orisinal
+// (lihat GameArt) sehingga tak perlu gambar pihak ketiga & bebas hak cipta.
+const GAMES_SOON: { key: string; name: string; accent: string }[] = [
+  { key: "panen-sprint", name: "Panen Sprint", accent: "from-lime-500 to-green-700" },
+  { key: "sortir-sawit", name: "Sortir Sawit", accent: "from-amber-500 to-orange-700" },
+  { key: "logika-kebun", name: "Logika Kebun", accent: "from-teal-500 to-emerald-700" },
+  { key: "rantai-pasok", name: "Rantai Pasok", accent: "from-sky-500 to-blue-700" },
+  { key: "tebak-agro", name: "Tebak Agro", accent: "from-violet-500 to-purple-700" },
+  { key: "target-mutu", name: "Target Mutu", accent: "from-rose-500 to-red-700" },
 ];
 
 // Logo anak perusahaan (file di public/img/logo-anper/) — ditampilkan di footer.
@@ -220,6 +232,99 @@ function SwipeRow({ children, itemClass, center = false }: { children: React.Rea
       )}
     </div>
   );
+}
+
+// Ilustrasi vektor orisinal per game coming-soon (bebas hak cipta). Digambar
+// dengan bentuk putih semi-transparan agar terbaca di atas gradien kartu apa
+// pun; `slice` membuatnya memenuhi kartu seperti gambar latar.
+function GameArt({ k }: { k: string }) {
+  const cls = "absolute inset-0 h-full w-full";
+  const props = { viewBox: "0 0 200 150", preserveAspectRatio: "xMidYMid slice", className: cls, "aria-hidden": true } as const;
+  switch (k) {
+    case "panen-sprint": // pelari tunas + lintasan
+      return (
+        <svg {...props}>
+          <circle cx="165" cy="28" r="34" fill="#fff" opacity="0.12" />
+          <path d="M0 118 H200" stroke="#fff" strokeOpacity="0.3" strokeWidth="3" strokeDasharray="14 11" />
+          <g fill="#fff">
+            <path d="M104 70 q22 -6 30 -26 q-22 2 -30 22 z" opacity="0.85" />
+            <circle cx="100" cy="64" r="9" />
+            <path d="M96 73 l12 4 -3 16 8 14 -7 4 -10 -16 z" opacity="0.95" />
+          </g>
+          <g stroke="#fff" strokeOpacity="0.65" strokeWidth="3" strokeLinecap="round">
+            <path d="M34 64 h26" /><path d="M22 80 h32" /><path d="M38 96 h22" />
+          </g>
+        </svg>
+      );
+    case "sortir-sawit": // konveyor + buah/krat tersortir
+      return (
+        <svg {...props}>
+          <circle cx="40" cy="34" r="30" fill="#fff" opacity="0.12" />
+          <g fill="#fff" opacity="0.9">
+            <circle cx="118" cy="52" r="13" /><circle cx="146" cy="46" r="9" opacity="0.7" />
+            <rect x="40" y="78" width="34" height="30" rx="4" />
+            <rect x="84" y="86" width="30" height="22" rx="4" opacity="0.8" />
+            <rect x="124" y="80" width="32" height="28" rx="4" opacity="0.65" />
+          </g>
+          <path d="M16 118 H184" stroke="#fff" strokeOpacity="0.35" strokeWidth="6" strokeLinecap="round" />
+          <g fill="#fff" opacity="0.5"><circle cx="40" cy="126" r="4" /><circle cx="100" cy="126" r="4" /><circle cx="160" cy="126" r="4" /></g>
+        </svg>
+      );
+    case "logika-kebun": // grid puzzle + daun
+      return (
+        <svg {...props}>
+          <g fill="#fff" opacity="0.16">
+            <rect x="30" y="30" width="40" height="40" rx="6" /><rect x="80" y="30" width="40" height="40" rx="6" />
+            <rect x="130" y="30" width="40" height="40" rx="6" /><rect x="30" y="80" width="40" height="40" rx="6" />
+            <rect x="130" y="80" width="40" height="40" rx="6" />
+          </g>
+          <path d="M100 80 q22 0 22 22 q-22 0 -22 -22 z" fill="#fff" opacity="0.9" />
+          <path d="M100 102 q0 -16 14 -24" stroke="#fff" strokeOpacity="0.6" strokeWidth="2.5" fill="none" />
+          <path d="M84 36 a8 8 0 0 1 0 16 v8 h24 v-24 h-8 a8 8 0 0 1 -16 0 z" fill="#fff" opacity="0.8" />
+        </svg>
+      );
+    case "rantai-pasok": // truk + rute + simpul
+      return (
+        <svg {...props}>
+          <path d="M20 40 C70 20 120 70 184 44" stroke="#fff" strokeOpacity="0.4" strokeWidth="2.5" strokeDasharray="6 8" fill="none" />
+          <g fill="#fff" opacity="0.85"><circle cx="20" cy="40" r="6" /><circle cx="100" cy="52" r="6" /><circle cx="184" cy="44" r="6" /></g>
+          <g fill="#fff">
+            <rect x="40" y="86" width="56" height="30" rx="4" />
+            <path d="M96 94 h22 l16 14 v8 h-38 z" opacity="0.9" />
+            <circle cx="58" cy="120" r="8" /><circle cx="118" cy="120" r="8" />
+          </g>
+          <g fill="#19191B" opacity="0.5"><circle cx="58" cy="120" r="3" /><circle cx="118" cy="120" r="3" /></g>
+        </svg>
+      );
+    case "tebak-agro": // kartu tanya + bohlam ide
+      return (
+        <svg {...props}>
+          <circle cx="150" cy="40" r="34" fill="#fff" opacity="0.12" />
+          <g fill="#fff" opacity="0.9">
+            <rect x="36" y="44" width="62" height="78" rx="8" transform="rotate(-8 67 83)" opacity="0.6" />
+            <rect x="58" y="40" width="62" height="78" rx="8" />
+          </g>
+          <text x="89" y="92" textAnchor="middle" fontSize="46" fontWeight="700" fill="#19191B" opacity="0.55">?</text>
+          <g fill="#fff"><circle cx="150" cy="52" r="13" /><rect x="145" y="64" width="10" height="8" rx="2" /></g>
+          <g stroke="#fff" strokeOpacity="0.6" strokeWidth="2.5" strokeLinecap="round"><path d="M150 26 v-7" /><path d="M172 40 h7" /><path d="M168 24 l5 -5" /></g>
+        </svg>
+      );
+    case "target-mutu": // target + panah + centang
+    default:
+      return (
+        <svg {...props}>
+          <g fill="none" stroke="#fff">
+            <circle cx="78" cy="78" r="48" strokeOpacity="0.25" strokeWidth="3" />
+            <circle cx="78" cy="78" r="32" strokeOpacity="0.4" strokeWidth="3" />
+            <circle cx="78" cy="78" r="16" strokeOpacity="0.6" strokeWidth="3" />
+          </g>
+          <circle cx="78" cy="78" r="6" fill="#fff" />
+          <path d="M150 30 L96 72" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
+          <path d="M150 30 l-2 14 14 -2 z" fill="#fff" />
+          <path d="M126 96 l10 10 20 -22" stroke="#fff" strokeOpacity="0.85" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      );
+  }
 }
 
 export default function HomePage() {
@@ -617,9 +722,53 @@ export default function HomePage() {
 
         {/* Games */}
         <section className="mt-14">
-          <div className="text-[28px] font-bold sm:text-4xl">Games (Coming Soon)</div>
+          <div className="text-[28px] font-bold sm:text-4xl">Games</div>
           <div className="mt-2 max-w-4xl text-[16px] text-white/90 sm:text-xl">
             Game berasa belajar dengan tiap tantangannya dirancang buat bantu kamu ngerti materi sesuai tujuan belajar kamu.
+          </div>
+
+          <div className="mt-6">
+            <SwipeRow itemClass="w-[60%] sm:w-[38%] lg:w-[26%]">
+              {[
+                // Counter Dash — sudah bisa dimainkan (buka di tab baru).
+                <a
+                  key="counter-dash"
+                  href="https://rakamin---counter-dash.web.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Main Counter Dash (buka di tab baru)"
+                  className="group relative block h-48 overflow-hidden rounded-2xl ring-1 ring-white/10 transition hover:ring-emerald-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70 sm:h-52"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/img/games/banner-game1.jpeg" alt="Counter Dash" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+                  <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-bold text-white shadow">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Tersedia
+                  </span>
+                  <div className="absolute inset-x-0 bottom-0 p-4">
+                    <div className="text-lg font-bold">Counter Dash</div>
+                    <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1.5 text-[12.5px] font-semibold text-white transition-transform group-hover:scale-105">
+                      <Play className="h-3.5 w-3.5 fill-current" /> Main Sekarang
+                    </span>
+                  </div>
+                </a>,
+                // Game lain — masih digarap (Coming Soon), ilustrasi SVG orisinal.
+                ...GAMES_SOON.map((g) => (
+                  <div
+                    key={g.key}
+                    className={`group/card relative h-48 overflow-hidden rounded-2xl bg-gradient-to-br ${g.accent} ring-1 ring-white/10 sm:h-52`}
+                  >
+                    <GameArt k={g.key} />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                    <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-semibold text-white/90 backdrop-blur-sm">Coming Soon</span>
+                    <div className="absolute inset-x-0 bottom-0 p-4">
+                      <div className="text-lg font-bold text-white">{g.name}</div>
+                      <div className="mt-0.5 text-[12px] text-white/70">Segera hadir</div>
+                    </div>
+                  </div>
+                )),
+              ]}
+            </SwipeRow>
           </div>
         </section>
 

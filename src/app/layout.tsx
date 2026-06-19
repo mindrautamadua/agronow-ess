@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import PushSetup from "@/components/PushSetup";
+import PushPrompt from "@/components/PushPrompt";
 
 export const metadata: Metadata = {
   applicationName: "Agronow",
@@ -40,6 +41,7 @@ export default function RootLayout({
         {children}
         <ServiceWorkerRegister />
         <PushSetup />
+        <PushPrompt />
       </body>
     </html>
   );

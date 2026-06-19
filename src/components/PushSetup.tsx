@@ -60,6 +60,37 @@ export async function enablePush(): Promise<PushResult> {
   }
 }
 
+/** Apakah perangkat ini sedang berlangganan push (terlepas dari status izin). */
+export async function pushSubscribed(): Promise<boolean> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return false;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    return !!(await reg.pushManager.getSubscription());
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Hentikan langganan push di perangkat ini: hapus dari server lalu unsubscribe
+ * di browser. Izin notifikasi (Notification.permission) TIDAK bisa dicabut via
+ * JS — hanya langganannya yang dilepas, sehingga push berhenti diterima.
+ */
+export async function disablePush(): Promise<void> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    await fetch("/api/push/subscribe", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    });
+    await sub.unsubscribe();
+  } catch { /* abaikan */ }
+}
+
 export const PUSH_MESSAGE: Record<PushResult, string> = {
   ok: "Notifikasi aktif ✓",
   "no-vapid": "Konfigurasi push belum lengkap di server (VAPID). Hubungi admin.",

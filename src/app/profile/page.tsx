@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import BottomGradient from "@/components/BottomGradient";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
+import NotificationToggle from "@/components/NotificationToggle";
 import {
   Mail, Phone, MapPin, Briefcase, Building2, Calendar, User as UserIcon,
   BookOpen, Award, Clock, Star,
@@ -158,6 +159,12 @@ export default function ProfilePage() {
               <Info icon={Calendar} label="Tanggal Lahir" value={m.birth_date ? `${m.birth_place ? m.birth_place + ", " : ""}${fmtDate(m.birth_date)}` : (m.birth_place || "-")} />
               <Info icon={MapPin} label="Kota / Provinsi" value={[m.city, m.province].filter(Boolean).join(", ") || null} />
               <Info icon={MapPin} label="Alamat" value={m.address} />
+            </section>
+
+            {/* Pengaturan */}
+            <section className="mt-8">
+              <h3 className="mb-3 text-[13px] font-bold uppercase tracking-wider text-white/45">Pengaturan</h3>
+              <NotificationToggle />
             </section>
           </>
         )}

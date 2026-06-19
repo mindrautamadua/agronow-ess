@@ -9,16 +9,7 @@ import { Skeleton } from "@/components/Skeleton";
 
 // ── Tipe data dari /api/microlearning ──
 interface QuizOption { name: string; correct: boolean }
-interface Daily {
-  date: string;
-  term: { name: string; desc: string } | null;
-  quiz: { question: string; options: QuizOption[] } | null;
-  quote: { text: string; author: string } | null;
-  totalTerms: number;
-}
-
-// ── Streak (disimpan di perangkat; server-persist menyusul saat write-API siap) ──
-const LS_KEY = "ess_microlearning_streak_v1";
+// ── Streak (disimpan di server: `ess_microlearning_log`, lintas perangkat) ──
 interface StreakData {
   lastDate: string;
   current: number;
@@ -29,22 +20,21 @@ interface StreakData {
 }
 const EMPTY: StreakData = { lastDate: "", current: 0, longest: 0, total: 0, correct: 0, history: {} };
 
+interface Daily {
+  date: string;
+  term: { name: string; desc: string } | null;
+  quiz: { question: string; options: QuizOption[] } | null;
+  quote: { text: string; author: string } | null;
+  totalTerms: number;
+  streak?: StreakData;
+}
+
 // Aritmetika tanggal aman-zona-waktu atas string "YYYY-MM-DD".
 function addDays(d: string, n: number): string {
   const [y, m, dd] = d.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, dd));
   dt.setUTCDate(dt.getUTCDate() + n);
   return dt.toISOString().slice(0, 10);
-}
-
-function loadStreak(): StreakData {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return EMPTY;
-    return { ...EMPTY, ...JSON.parse(raw) };
-  } catch {
-    return EMPTY;
-  }
 }
 
 const DOW = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
@@ -54,12 +44,12 @@ export default function HarianPage() {
   const [loading, setLoading] = useState(true);
   const [streak, setStreak] = useState<StreakData>(EMPTY);
   const [picked, setPicked] = useState<number | null>(null);
+  const [awarded, setAwarded] = useState(false);
 
   useEffect(() => {
-    setStreak(loadStreak());
     fetch("/api/microlearning")
       .then((r) => r.json())
-      .then((d: Daily) => setData(d))
+      .then((d: Daily) => { setData(d); if (d.streak) setStreak(d.streak); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -92,11 +82,11 @@ export default function HarianPage() {
     setPicked(i);
     const isCorrect = data.quiz.options[i].correct;
 
-    // Hitung streak (idempoten: hanya sekali per hari).
+    // Update optimistik (idempoten: hanya sekali per hari) — biar UI langsung responsif.
     setStreak((prev) => {
       if (prev.lastDate === today) return prev; // sudah dihitung hari ini
       const cont = prev.lastDate === addDays(today, -1);
-      const next: StreakData = {
+      return {
         lastDate: today,
         current: cont ? prev.current + 1 : 1,
         longest: Math.max(prev.longest, cont ? prev.current + 1 : 1),
@@ -104,9 +94,17 @@ export default function HarianPage() {
         correct: prev.correct + (isCorrect ? 1 : 0),
         history: { ...prev.history, [today]: isCorrect ? "correct" : "wrong" },
       };
-      try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch {}
-      return next;
     });
+
+    // Simpan ke server (sumber kebenaran), lalu sinkronkan streak dari hasil hitung server.
+    fetch("/api/microlearning", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ term: data.term?.name, correct: isCorrect }),
+    })
+      .then((r) => r.json())
+      .then((d) => { if (d.streak) setStreak(d.streak); if (d.awarded) setAwarded(true); })
+      .catch(() => { /* offline → biarkan nilai optimistik */ });
   }
 
   return (
@@ -224,11 +222,19 @@ export default function HarianPage() {
               {/* Feedback + penjelasan */}
               {answered && data.term && (
                 <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-500/[0.07] p-4">
-                  <p className="text-[13px] font-semibold text-emerald-200">
-                    {doneToday && picked === null ? "Kamu sudah menyelesaikan kuis hari ini ✓"
-                      : picked !== null && data.quiz.options[picked].correct ? "Tepat sekali! 🎉"
-                      : "Belum tepat — tak apa, ini yang benar:"}
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[13px] font-semibold text-emerald-200">
+                      {doneToday && picked === null ? "Kamu sudah menyelesaikan kuis hari ini ✓"
+                        : picked !== null && data.quiz.options[picked].correct ? "Tepat sekali! 🎉"
+                        : "Belum tepat — tak apa, ini yang benar:"}
+                    </p>
+                    {awarded && (
+                      <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+                        className="inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-0.5 text-[12px] font-bold text-amber-200">
+                        <Flame className="h-3.5 w-3.5" /> +5 poin
+                      </motion.span>
+                    )}
+                  </div>
                   <p className="mt-1.5 text-[14px]"><b className="text-white">{data.term.name}</b></p>
                   <p className="mt-1 text-[13.5px] leading-relaxed text-white/75">{data.term.desc}</p>
                 </motion.div>

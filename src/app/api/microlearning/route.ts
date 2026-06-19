@@ -1,8 +1,50 @@
 import { query } from "@/lib/db";
+import { currentMemberId } from "@/lib/member";
 import { clean } from "@/lib/text";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+interface StreakData {
+  lastDate: string; current: number; longest: number; total: number;
+  correct: number; history: Record<string, "correct" | "wrong">;
+}
+
+// Tambah n hari pada string "YYYY-MM-DD" (aman zona waktu).
+function addDays(d: string, n: number): string {
+  const [y, m, dd] = d.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, dd));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Streak microlearning member, dihitung dari `ess_microlearning_log` (lintas perangkat). */
+async function getStreak(memberId: number): Promise<StreakData> {
+  const rows = await query<{ tanggal: string; correct: number }>(
+    `SELECT tanggal::text AS tanggal, correct FROM ess_microlearning_log WHERE member_id = ? ORDER BY tanggal`,
+    [String(memberId)],
+  );
+  if (rows.length === 0) return { lastDate: "", current: 0, longest: 0, total: 0, correct: 0, history: {} };
+
+  const dates = rows.map((r) => r.tanggal);
+  const total = rows.length;
+  const correct = rows.reduce((s, r) => s + (Number(r.correct) ? 1 : 0), 0);
+  const lastDate = dates[dates.length - 1];
+
+  const history: Record<string, "correct" | "wrong"> = {};
+  for (const r of rows.slice(-30)) history[r.tanggal] = Number(r.correct) ? "correct" : "wrong";
+
+  let longest = 1, run = 1;
+  for (let i = 1; i < dates.length; i++) {
+    run = addDays(dates[i - 1], 1) === dates[i] ? run + 1 : 1;
+    if (run > longest) longest = run;
+  }
+  let current = 1;
+  for (let i = dates.length - 1; i > 0; i--) {
+    if (addDays(dates[i - 1], 1) === dates[i]) current++; else break;
+  }
+  return { lastDate, current, longest, total, correct, history };
+}
 
 /**
  * Microlearning harian: satu kuis "active recall" per hari + quote inspirasi.
@@ -43,6 +85,8 @@ function shuffle<T>(arr: T[], rng: () => number): T[] {
 
 export async function GET() {
   try {
+    const memberId = await currentMemberId();
+    const streak = await getStreak(memberId);
     const [terms, quotes] = await Promise.all([
       query<{ kamus_name: string; kamus_desc: string }>(
         `SELECT kamus_name, kamus_desc FROM _kamus
@@ -62,7 +106,7 @@ export async function GET() {
     const date = todayJakarta();
 
     if (pool.length < 4) {
-      return Response.json({ date, term: null, quiz: null, quote: null, totalTerms: pool.length });
+      return Response.json({ date, term: null, quiz: null, quote: null, totalTerms: pool.length, streak });
     }
 
     const rng = seededRng(date);
@@ -100,9 +144,57 @@ export async function GET() {
       quiz: { question, options }, // tebak istilah dari definisinya (active recall)
       quote,
       totalTerms: pool.length,
+      streak,
     });
   } catch (e) {
     console.error("/api/microlearning", e);
     return Response.json({ error: "Gagal memuat data" }, { status: 500 });
+  }
+}
+
+/**
+ * Simpan jawaban kuis harian member. Idempoten: satu entri per (member, tanggal)
+ * — tanggal ditentukan SERVER (zona Jakarta), jawaban pertama yang dihitung.
+ * Mengembalikan streak terbaru hasil hitung ulang dari `ess_microlearning_log`.
+ * Body: `{ term?: string, correct?: boolean }`.
+ */
+export async function POST(req: Request) {
+  const memberId = await currentMemberId();
+  let b: Record<string, unknown>;
+  try { b = await req.json(); } catch { return Response.json({ error: "Permintaan tidak valid" }, { status: 400 }); }
+
+  const correct = b.correct ? 1 : 0;
+  const term = String(b.term ?? "").trim().slice(0, 255) || null;
+  const date = todayJakarta();
+
+  try {
+    const ins = await query<{ id: number }>(
+      `INSERT INTO ess_microlearning_log (member_id, tanggal, term, correct)
+       VALUES (?, ?::date, ?, ?)
+       ON CONFLICT (member_id, tanggal) DO NOTHING
+       RETURNING id`,
+      [String(memberId), date, term, correct],
+    );
+    const awarded = ins.length > 0; // hanya hari yang BARU diselesaikan dapat poin
+
+    if (awarded) {
+      // +5 poin "Daily Quiz" (sekali per hari). Best-effort: kegagalan poin tidak
+      // menggagalkan simpan kuis. `mp_id` tanpa sequence → MAX+1 (pola tabel ini).
+      try {
+        await query(
+          `INSERT INTO _member_poin (mp_id, member_id, mp_section, mp_content_id, mp_name, mp_poin, mp_create_date)
+           VALUES ((SELECT COALESCE(MAX(mp_id), 0) + 1 FROM _member_poin), ?, 'Daily', 0, 'Daily Quiz', 5, NOW()::timestamp)`,
+          [String(memberId)],
+        );
+      } catch (e) {
+        console.error("POST /api/microlearning award poin", e);
+      }
+    }
+
+    const streak = await getStreak(memberId);
+    return Response.json({ ok: true, streak, awarded });
+  } catch (e) {
+    console.error("POST /api/microlearning", e);
+    return Response.json({ error: "Gagal menyimpan jawaban" }, { status: 500 });
   }
 }

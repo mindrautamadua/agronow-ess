@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import NotificationBell from "@/components/NotificationBell";
+import { NAV } from "@/lib/nav";
 import LearningCurve from "@/components/LearningCurve";
 import Leaderboard from "@/components/Leaderboard";
 import {
@@ -115,27 +116,6 @@ const ANPER_LOGOS = [
   "kpbn.png",
   "bionusa.png",
   "kinra_logo_transparent.png",
-];
-
-interface NavItem { label: string; active?: boolean; href: string; dropdown?: { label: string; href: string }[] }
-const NAV: NavItem[] = [
-  { label: "Home", active: true, href: "/home" },
-  {
-    label: "Progres Pembelajaran", href: "/learning",
-    dropdown: [
-      { label: "AI Coach", href: "/coach" },
-      { label: "Aktivitas Pembelajaran", href: "/learning" },
-      { label: "Pembelajaran Formal", href: "/learning?bucket=formal" },
-      { label: "Pembelajaran Sosial", href: "/learning?bucket=social" },
-      { label: "Belajar Dari Pengalaman", href: "/learning?bucket=experiential" },
-      { label: "Belajar Harian", href: "/harian" },
-    ],
-  },
-  { label: "Insight Hub", href: "/insight-hub" },
-  { label: "Chat", href: "/chat" },
-  { label: "Profile", href: "/profile" },
-  { label: "Bantuan", href: "/bantuan/panduan", dropdown: [{ label: "Panduan", href: "/bantuan/panduan" }, { label: "FAQ", href: "/bantuan/faq" }, { label: "Helpdesk", href: "/bantuan/helpdesk" }] },
-  { label: "Logout", href: "/login" },
 ];
 
 const rupiah = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
@@ -290,7 +270,7 @@ export default function HomePage() {
               <div key={n.label} className="group relative">
                 <button
                   onClick={() => go(n.href)}
-                  className={`flex items-center gap-1 whitespace-nowrap rounded px-2 py-1.5 text-[14px] transition-colors hover:text-emerald-300 ${n.active ? "font-semibold" : "text-white/90"}`}
+                  className={`flex items-center gap-1 whitespace-nowrap rounded px-2 py-1.5 text-[14px] transition-colors hover:text-emerald-300 ${n.href === "/home" ? "font-semibold" : "text-white/90"}`}
                 >
                   {n.label}
                   {n.dropdown && <ChevronDown className="h-3.5 w-3.5" />}

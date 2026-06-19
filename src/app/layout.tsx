@@ -3,6 +3,7 @@ import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import PushSetup from "@/components/PushSetup";
 import PushPrompt from "@/components/PushPrompt";
+import CoachWidget from "@/components/CoachWidget";
 
 export const metadata: Metadata = {
   applicationName: "Agronow",
@@ -39,6 +40,7 @@ export default function RootLayout({
     <html lang="id">
       <body>
         {children}
+        <CoachWidget />
         <ServiceWorkerRegister />
         <PushSetup />
         <PushPrompt />

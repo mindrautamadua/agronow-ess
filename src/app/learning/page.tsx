@@ -101,7 +101,7 @@ function LearningInner() {
   const [filter, setFilter] = useState(() => paramFilter(params));
   const [openType, setOpenType] = useState<string | null>(null);
   const [data, setData] = useState<Data | null>(null);
-  const [err, setErr] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   // Modal "Kelola Jadwal" Coaching/Mentoring (khusus pembimbing BOD-1/BOD-2 pada
   // view ?metode=mb_c / mb_m). Null = tertutup.
@@ -129,7 +129,16 @@ function LearningInner() {
 
   useEffect(() => { setFilter(paramFilter(params)); }, [params]);
   useEffect(() => {
-    fetch("/api/learning").then((r) => r.json()).then((d) => { d.summary ? setData(d) : setErr(true); }).catch(() => setErr(true));
+    setErr(null);
+    fetch("/api/learning")
+      .then(async (r) => ({ ok: r.ok, status: r.status, body: await r.json().catch(() => ({})) }))
+      .then(({ ok, status, body }) => {
+        if (ok && body.summary) { setData(body); return; }
+        // Susun pesan dari respons API; sertakan detail teknis bila ada (dev).
+        const msg = body.error || `Permintaan gagal (HTTP ${status}).`;
+        setErr(body.detail ? `${msg} — ${body.detail}` : msg);
+      })
+      .catch((e) => setErr(`Tidak dapat terhubung ke server: ${e instanceof Error ? e.message : "kesalahan jaringan"}.`));
   }, []);
 
   const activeMethod = METHOD_LABEL[filter] ? filter : null;
@@ -153,7 +162,12 @@ function LearningInner() {
         <h1 className="mt-4 text-2xl font-bold sm:text-3xl">Aktivitas Pembelajaran</h1>
         <p className="mt-1 text-[14px] text-white/60">Progres pengembangan kompetensi dengan kerangka 70 · 20 · 10.</p>
 
-        {err && <p className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">Gagal memuat data.</p>}
+        {err && (
+          <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+            <p className="font-semibold">Gagal memuat data.</p>
+            <p className="mt-1 text-red-300/80">{err}</p>
+          </div>
+        )}
         {!data && !err && (
           <>
             <section className="mt-5 grid gap-4 sm:grid-cols-3">

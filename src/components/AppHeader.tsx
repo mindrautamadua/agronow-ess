@@ -4,28 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Menu, ChevronDown } from "lucide-react";
 import NotificationBell from "./NotificationBell";
-
-interface NavItem { label: string; href: string; dropdown?: { label: string; href: string }[] }
-
-const NAV: NavItem[] = [
-  { label: "Home", href: "/home" },
-  {
-    label: "Progres Pembelajaran", href: "/learning",
-    dropdown: [
-      { label: "AI Coach", href: "/coach" },
-      { label: "Aktivitas Pembelajaran", href: "/learning" },
-      { label: "Pembelajaran Formal", href: "/learning?bucket=formal" },
-      { label: "Pembelajaran Sosial", href: "/learning?bucket=social" },
-      { label: "Belajar Dari Pengalaman", href: "/learning?bucket=experiential" },
-      { label: "Belajar Harian", href: "/harian" },
-    ],
-  },
-  { label: "Insight Hub", href: "/insight-hub" },
-  { label: "Chat", href: "/chat" },
-  { label: "Profile", href: "/profile" },
-  { label: "Bantuan", href: "/bantuan/panduan", dropdown: [{ label: "Panduan", href: "/bantuan/panduan" }, { label: "FAQ", href: "/bantuan/faq" }, { label: "Helpdesk", href: "/bantuan/helpdesk" }] },
-  { label: "Logout", href: "/login" },
-];
+import { NAV } from "@/lib/nav";
 
 export default function AppHeader({ active }: { active?: string }) {
   const router = useRouter();

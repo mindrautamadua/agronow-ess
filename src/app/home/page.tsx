@@ -129,7 +129,6 @@ const NAV: NavItem[] = [
       { label: "Pembelajaran Sosial", href: "/learning?bucket=social" },
       { label: "Belajar Dari Pengalaman", href: "/learning?bucket=experiential" },
       { label: "Belajar Harian", href: "/harian" },
-      { label: "Peta Kompetensi", href: "/kompetensi" },
     ],
   },
   { label: "Insight Hub", href: "/insight-hub" },

@@ -251,6 +251,9 @@ function LearningInner() {
                       <span className="text-sm font-bold text-white/70">{recognizedLabel(b.earned, b.earnedReal, b.target, "Jam")}</span>
                     </div>
                     <p className="mt-4 text-[15px] font-semibold">{meta.short}</p>
+                    {GLOSSARY[b.key]?.desc && (
+                      <p className="mt-1 text-[11.5px] leading-snug text-white/45">{GLOSSARY[b.key].desc}</p>
+                    )}
                     <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/10">
                       <div className={`h-full rounded-full bg-gradient-to-r ${meta.accent}`} style={{ width: `${Math.min(b.pct, 100)}%` }} />
                     </div>
